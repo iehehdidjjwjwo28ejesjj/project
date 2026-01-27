@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#0d1117">
+    <title>SyncCode Pro</title>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.2/ace.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.2/mode-html.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.2/mode-css.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.2/mode-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.2/theme-monokai.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.2/ext-language_tools.min.js"></script>
+    
+    <style>
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; margin: 0; padding: 0; }
+        
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0d1117; 
+            color: #c9d1d9; 
+            height: 100vh; 
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            touch-action: pan-x pan-y;
+        }
+        
+        /* Toolbar */
+        .toolbar { 
+            height: 50px; 
+            background: #161b22; 
+            border-bottom: 1px solid #30363d;
+            display: flex; 
+            align-items: center; 
+            padding: 0 12px; 
+            gap: 8px;
+            flex-shrink: 0;
+            z-index: 100;
+        }
+        
+        button { 
+            background: #21262d; 
+            border: 1px solid #30363d; 
+            color: #f0f6fc; 
+            border-radius: 6px; 
+            height: 36px; 
+            padding: 0 12px; 
+            font-size: 14px;
+            cursor: pointer;
+            display: flex; 
+            align-items: center;
+            gap: 6px;
+            user-select: none;
+        }
+        
+        button:hover { background: #30363d; }
+        button:active { transform: scale(0.95); }
+        
+        .btn-primary { background: #238636; border-color: #238636; }
+        .btn-primary:hover { background: #2ea043; }
+        .btn-stop { background: #da3633; border-color: #da3633; }
+        .btn-stop:hover { background: #f85149; }
+        .btn-yellow { background: #d29922; border-color: #d29922; color: black; }
+        .btn-icon { width: 36px; padding: 0; justify-content: center; }
+        
+        .status {
+            margin-left: auto;
+            font-size: 12px;
+            color: #8b949e;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #3fb950;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+        
+        /* Dropdown */
+        .dropdown { position: relative; min-width: 140px; }
+        .dropdown-trigger { 
+            width: 100%;
+            background: #21262d;
+            border: 1px solid #30363d;
+            color: #f0f6fc;
+            border-radius: 6px;
+            height: 36px;
+            padding: 0 10px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .dropdown-menu {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            margin-top: 4px;
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            display: none;
+            overflow: hidden;
+            z-index: 101;
+        }
+        .dropdown-menu.open { display: block; }
+        .dropdown-item {
+            padding: 10px 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            border-bottom: 1px solid #30363d;
+        }
+        .dropdown-item:hover { background: #21262d; }
+        .dropdown-item.active { background: #238636; color: white; }
+        
+        .file-icon {
+            width: 18px;
+            height: 18px;
+            border-radius: 3px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: bold;
+        }
+        .html-icon { background: #e34c26; color: white; }
+        .css-icon { background: #264de4; color: white; }
+        .js-icon { background: #f7df1e; color: black; }
+        
+        /* Editor Area */
+        .editor-container {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .editor-pane {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: none;
+        }
+        .editor-pane.active { display: block; }
+        
+        /* Remote Cursor Styles */
+        .remote-cursor {
+            position: absolute;
+            pointer-events: none;
+            z-index: 100;
+        }
+        .cursor-caret {
+            width: 2px;
+            height: 20px;
+            animation: blink 1s infinite;
+        }
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0.2; }
+        }
+        .cursor-label {
+            position: absolute;
+            top: -20px;
+            left: -2px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: bold;
+            color: black;
+            white-space: nowrap;
+        }
+        
+        /* Preview Overlay */
+        .preview-overlay {
+            position: fixed;
+            top: 50px;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: white;
+            z-index: 99;
+            display: none;
+            flex-direction: column;
+        }
+        .preview-overlay.active { display: flex; }
+        
+        iframe { 
+            flex: 1; 
+            border: none; 
+            width: 100%; 
+            background: white;
+        }
+        
+        /* Console Panel (Bottom) */
+        .console-wrapper {
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            height: 0;
+            background: #161b22;
+            border-top: 2px solid #30363d;
+            display: flex;
+            flex-direction: column;
+            z-index: 98;
+            transition: height 0.3s;
+        }
+        .console-wrapper.open { height: 200px; }
+        
+        .console-resize {
+            height: 8px;
+            background: #30363d;
+            cursor: row-resize;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .console-resize::after {
+            content: '';
+            width: 40px;
+            height: 2px;
+            background: #484f58;
+            border-radius: 1px;
+        }
+        
+        .console-header {
+            height: 32px;
+            background: #21262d;
+            display: flex;
+            align-items: center;
+            padding: 0 12px;
+            font-size: 12px;
+            color: #8b949e;
+            border-bottom: 1px solid #30363d;
+            justify-content: space-between;
+            flex-shrink: 0;
+        }
+        
+        .console-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px 12px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+        
+        .console-line {
+            padding: 2px 0;
+            display: flex;
+            gap: 8px;
+        }
+        .console-log { color: #c9d1d9; }
+        .console-error { color: #f85149; }
+        .console-warn { color: #d29922; }
+        .console-info { color: #58a6ff; }
+        .console-time { color: #6e7681; flex-shrink: 0; }
+        
+        .console-input-line {
+            display: flex;
+            gap: 8px;
+            padding: 6px 12px;
+            border-top: 1px solid #30363d;
+            flex-shrink: 0;
+        }
+        .console-prompt { color: #3fb950; font-weight: bold; }
+        .console-input {
+            background: transparent;
+            border: none;
+            color: #c9d1d9;
+            font-family: inherit;
+            font-size: inherit;
+            flex: 1;
+            outline: none;
+        }
+        
+        .ace_editor {
+            font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace !important;
+        }
+        .ace_tooltip, .ace_folding-enabled { display: none !important; } /* Убираем три точки и подсказки */
+        
+        @media (max-width: 768px) {
+            .ace_editor { font-size: 16px !important; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Toolbar -->
+    <div class="toolbar">
+        <div class="dropdown" id="fileDropdown">
+            <div class="dropdown-trigger" id="dropdownTrigger">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span class="file-icon html-icon" id="fileIcon">H</span>
+                    <span id="fileName">index.html</span>
+                </div>
+                <i data-lucide="chevron-down" style="width: 16px; height: 16px;"></i>
+            </div>
+            <div class="dropdown-menu" id="dropdownMenu">
+                <div class="dropdown-item active" data-file="html" onclick="switchFile('html')">
+                    <span class="file-icon html-icon">H</span>
+                    <span>index.html</span>
+                </div>
+                <div class="dropdown-item" data-file="css" onclick="switchFile('css')">
+                    <span class="file-icon css-icon">C</span>
+                    <span>style.css</span>
+                </div>
+                <div class="dropdown-item" data-file="js" onclick="switchFile('js')">
+                    <span class="file-icon js-icon">J</span>
+                    <span>script.js</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Run/Stop Button -->
+        <button class="btn-primary" id="runBtn" onclick="toggleRun()">
+            <i data-lucide="play" id="runIcon"></i>
+            <span id="runText">Run</span>
+        </button>
+        
+        <!-- Console Toggle -->
+        <button class="btn-yellow" id="consoleToggleBtn" onclick="toggleConsole()">
+            <i data-lucide="terminal"></i>
+            <span>Console</span>
+        </button>
+        
+        <div class="status">
+            <span class="status-dot"></span>
+            <span id="userCount">1 online</span>
+        </div>
+    </div>
+    
+    <!-- Editors -->
+    <div class="editor-container" id="editorContainer">
+        <div class="editor-pane active" id="pane-html">
+            <div id="editor-html" style="width:100%;height:100%;"></div>
+        </div>
+        <div class="editor-pane" id="pane-css">
+            <div id="editor-css" style="width:100%;height:100%;"></div>
+        </div>
+        <div class="editor-pane" id="pane-js">
+            <div id="editor-js" style="width:100%;height:100%;"></div>
+        </div>
+    </div>
+    
+    <!-- Preview Overlay -->
+    <div class="preview-overlay" id="previewOverlay">
+        <iframe id="previewFrame" sandbox="allow-scripts allow-same-origin"></iframe>
+    </div>
+    
+    <!-- Console Panel (Bottom) -->
+    <div class="console-wrapper" id="consoleWrapper">
+        <div class="console-resize" id="consoleResize"></div>
+        <div class="console-header">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <i data-lucide="terminal" style="width: 14px; height: 14px;"></i>
+                <span>Console</span>
+                <span style="color: #6e7681;" id="logCount">0 logs</span>
+            </div>
+            <button class="btn-icon" onclick="clearConsole()" style="width: 28px; height: 28px;">
+                <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i>
+            </button>
+        </div>
+        <div class="console-body" id="consoleBody">
+            <div style="color: #6e7681; text-align: center; margin-top: 20px;">Консоль готова к работе...</div>
+        </div>
+        <div class="console-input-line">
+            <span class="console-prompt">❯</span>
+            <input type="text" class="console-input" id="consoleInput" placeholder="Введите команду..." onkeydown="handleConsoleInput(event)">
+        </div>
+    </div>
+
+    <script>
+        // Config
+        const API_URL = 'wss://clouds.vigenersl.workers.dev/ws'; // WebSocket URL
+        const HTTP_URL = 'https://clouds.vigenersl.workers.dev/api';
+        
+        // State
+        let editors = {};
+        let currentFile = 'html';
+        let isRunning = false;
+        let isConsoleOpen = false;
+        let ws = null;
+        let userId = null;
+        let userColor = null;
+        let remoteUsers = new Map();
+        let consoleLogs = [];
+        let fontSize = 14;
+        let lastCursorSend = 0;
+        
+        // Default code
+        const defaultCode = {
+            html: `<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Test</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <h1>Hello World</h1>
+    <button id="btn">Click</button>
+    <script src="script.js"><\/script>
+</body>
+</html>`,
+            css: `body { 
+    font-family: Arial; 
+    background: #f0f0f0; 
+    text-align: center; 
+    padding: 50px; 
+}
+h1 { color: #333; }`,
+            js: `console.log('App started');
+document.getElementById('btn').onclick = () => {
+    console.log('Button clicked!');
+};`
+        };
+        
+        // Initialize
+        window.onload = function() {
+            initEditors();
+            initWebSocket();
+            initPinchZoom();
+            initConsoleResize();
+            lucide.createIcons();
+        };
+        
+        function initEditors() {
+            ['html', 'css', 'js'].forEach(type => {
+                editors[type] = ace.edit('editor-' + type);
+                editors[type].setTheme('ace/theme/monokai');
+                editors[type].session.setMode('ace/mode/' + (type === 'js' ? 'javascript' : type));
+                editors[type].setValue(defaultCode[type], -1);
+                editors[type].setOptions({
+                    fontSize: fontSize,
+                    showPrintMargin: false,
+                    enableBasicAutocompletion: true,
+                    enableLiveAutocompletion: true,
+                    enableSnippets: true,
+                    tabSize: 2,
+                    useSoftTabs: true,
+                    showFoldWidgets: false, // Убираем три точки сворачивания
+                    showGutter: true
+                });
+                
+                // Отключаем команд паллетт (три точки при клике)
+                editors[type].commands.removeCommand('showSettingsMenu');
+                
+                // Send changes
+                let timeout;
+                editors[type].on('change', () => {
+                    clearTimeout(timeout);
+                    timeout = setTimeout(() => {
+                        if (ws && ws.readyState === 1) {
+                            ws.send(JSON.stringify({
+                                type: 'change',
+                                file: type,
+                                content: editors[type].getValue()
+                            }));
+                        }
+                        if (isRunning) updatePreview();
+                    }, 500);
+                });
+                
+                // Send cursor position
+                editors[type].selection.on('changeCursor', () => {
+                    const now = Date.now();
+                    if (now - lastCursorSend > 100) { // throttle 100ms
+                        lastCursorSend = now;
+                        const pos = editors[type].selection.getCursor();
+                        if (ws && ws.readyState === 1) {
+                            ws.send(JSON.stringify({
+                                type: 'cursor',
+                                file: type,
+                                row: pos.row,
+                                column: pos.column
+                            }));
+                        }
+                    }
+                });
+            });
+        }
+        
+        // WebSocket Connection
+        function initWebSocket() {
+            ws = new WebSocket(API_URL);
+            
+            ws.onopen = () => {
+                console.log('Connected');
+            };
+            
+            ws.onmessage = (evt) => {
+                const data = JSON.parse(evt.data);
+                
+                if (data.type === 'init') {
+                    userId = data.yourId;
+                    userColor = data.yourColor;
+                    
+                    // Update files if different
+                    ['html', 'css', 'js'].forEach(f => {
+                        if (data.files[f] && data.files[f] !== editors[f].getValue()) {
+                            editors[f].setValue(data.files[f], -1);
+                        }
+                    });
+                    
+                    // Update user count
+                    updateUserCount(Object.keys(data.users).length);
+                    
+                    // Init remote cursors
+                    Object.entries(data.users).forEach(([id, u]) => {
+                        if (id !== userId) addRemoteCursor(id, u);
+                    });
+                }
+                
+                if (data.type === 'file' && data.userId !== userId) {
+                    if (editors[data.file].getValue() !== data.content) {
+                        const cursor = editors[data.file].selection.getCursor();
+                        editors[data.file].setValue(data.content, -1);
+                        editors[data.file].selection.moveTo(cursor.row, cursor.column);
+                    }
+                }
+                
+                if (data.type === 'cursor' && data.userId !== userId) {
+                    updateRemoteCursor(data.userId, data.file, data.row, data.column, data.color);
+                }
+                
+                if (data.type === 'join') {
+                    addRemoteCursor(data.userId, {color: data.color, name: data.name});
+                    updateUserCount(remoteUsers.size + 1);
+                }
+                
+                if (data.type === 'leave') {
+                    removeRemoteCursor(data.userId);
+                    updateUserCount(remoteUsers.size);
+                }
+            };
+            
+            ws.onclose = () => {
+                setTimeout(initWebSocket, 3000); // Reconnect
+            };
+        }
+        
+        // Remote Cursors
+        function addRemoteCursor(id, user) {
+            remoteUsers.set(id, user);
+            // Ace marker для курсора будет добавлен при первом обновлении позиции
+        }
+        
+        function updateRemoteCursor(id, file, row, column, color) {
+            if (!remoteUsers.has(id)) return;
+            
+            const user = remoteUsers.get(id);
+            const editor = editors[file];
+            if (!editor) return;
+            
+            // Remove old marker
+            if (user.marker) {
+                editor.session.removeMarker(user.marker);
+            }
+            
+            // Add new marker (range of one character)
+            const Range = ace.require('ace/range').Range;
+            const range = new Range(row, column, row, column + 1);
+            
+            // Custom marker class
+            const markerId = editor.session.addMarker(range, 'remote-cursor-' + id, 'text', false);
+            user.marker = markerId;
+            user.file = file;
+            
+            // Add visual element
+            setTimeout(() => {
+                const cells = document.querySelectorAll('.ace_marker-layer .ace_' + markerId);
+                cells.forEach(cell => {
+                    cell.innerHTML = `<div style="position:absolute;width:2px;height:20px;background:${user.color};animation:blink 1s infinite;"></div>
+                                     <div style="position:absolute;top:-20px;left:0;background:${user.color};padding:2px 6px;border-radius:4px;font-size:11px;color:black;font-weight:bold;white-space:nowrap;">Dev</div>`;
+                });
+            }, 10);
+        }
+        
+        function removeRemoteCursor(id) {
+            const user = remoteUsers.get(id);
+            if (user && user.marker && editors[user.file]) {
+                editors[user.file].session.removeMarker(user.marker);
+            }
+            remoteUsers.delete(id);
+        }
+        
+        function updateUserCount(count) {
+            document.getElementById('userCount').textContent = count + ' online';
+        }
+        
+        // File Switch
+        function switchFile(type) {
+            currentFile = type;
+            document.querySelectorAll('.editor-pane').forEach(p => p.classList.remove('active'));
+            document.getElementById('pane-' + type).classList.add('active');
+            
+            document.querySelectorAll('.dropdown-item').forEach(item => {
+                item.classList.toggle('active', item.dataset.file === type);
+            });
+            
+            const names = {html: 'index.html', css: 'style.css', js: 'script.js'};
+            document.getElementById('fileName').textContent = names[type];
+            document.getElementById('fileIcon').className = 'file-icon ' + type + '-icon';
+            document.getElementById('fileIcon').textContent = type === 'html' ? 'H' : type === 'css' ? 'C' : 'J';
+            
+            document.getElementById('dropdownMenu').classList.remove('open');
+            editors[type].resize();
+            lucide.createIcons();
+        }
+        
+        document.getElementById('dropdownTrigger').addEventListener('click', () => {
+            document.getElementById('dropdownMenu').classList.toggle('open');
+        });
+        
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.dropdown')) {
+                document.getElementById('dropdownMenu').classList.remove('open');
+            }
+        });
+        
+        // Run/Stop Toggle
+        function toggleRun() {
+            isRunning = !isRunning;
+            const btn = document.getElementById('runBtn');
+            const icon = document.getElementById('runIcon');
+            const text = document.getElementById('runText');
+            const preview = document.getElementById('previewOverlay');
+            
+            if (isRunning) {
+                btn.classList.remove('btn-primary');
+                btn.classList.add('btn-stop');
+                icon.setAttribute('data-lucide', 'square');
+                text.textContent = 'Stop';
+                preview.classList.add('active');
+                updatePreview();
+            } else {
+                btn.classList.remove('btn-stop');
+                btn.classList.add('btn-primary');
+                icon.setAttribute('data-lucide', 'play');
+                text.textContent = 'Run';
+                preview.classList.remove('active');
+            }
+            lucide.createIcons();
+        }
+        
+        // Console Toggle
+        function toggleConsole() {
+            isConsoleOpen = !isConsoleOpen;
+            document.getElementById('consoleWrapper').classList.toggle('open', isConsoleOpen);
+        }
+        
+        // Update Preview
+        function updatePreview() {
+            const html = editors.html.getValue();
+            const css = editors.css.getValue();
+            const js = editors.js.getValue();
+            
+            const script = `<script>
+                console.log = (...a) => parent.postMessage({t:'log',d:a.join(' ')},'*');
+                console.error = (...a) => parent.postMessage({t:'err',d:a.join(' ')},'*');
+                console.warn = (...a) => parent.postMessage({t:'warn',d:a.join(' ')},'*');
+                window.onerror = (m,l,n) => parent.postMessage({t:'err',d:m+' (line '+(n-14)+')'},'*'); // -14 для компенсации обертки
+            <\/script>`;
+            
+            const doc = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>${css}</style>
+</head>
+<body>
+${html}
+${script}
+<script>
+try{${js}}catch(e){console.error(e.message)}
+<\/script>
+</body>
+</html>`;
+            
+            document.getElementById('previewFrame').srcdoc = doc;
+        }
+        
+        // Console Logs
+        window.addEventListener('message', (e) => {
+            if (e.data && e.data.t) {
+                addLog(e.data.d, e.data.t);
+            }
+        });
+        
+        function addLog(msg, type='log') {
+            const time = new Date().toLocaleTimeString('ru-RU', {hour12:false});
+            consoleLogs.push({time, msg, type});
+            if (consoleLogs.length > 50) consoleLogs.shift();
+            
+            const body = document.getElementById('consoleBody');
+            const div = document.createElement('div');
+            div.className = 'console-line console-' + (type === 'err' ? 'error' : type === 'warn' ? 'warn' : 'log');
+            div.innerHTML = `<span class="console-time">${time}</span><span>${msg}</span>`;
+            body.appendChild(div);
+            body.scrollTop = body.scrollHeight;
+            document.getElementById('logCount').textContent = consoleLogs.length + ' logs';
+        }
+        
+        function clearConsole() {
+            consoleLogs = [];
+            document.getElementById('consoleBody').innerHTML = '';
+            document.getElementById('logCount').textContent = '0 logs';
+        }
+        
+        function handleConsoleInput(e) {
+            if (e.key === 'Enter') {
+                const code = e.target.value;
+                if (!code) return;
+                addLog('> ' + code, 'info');
+                try {
+                    const frame = document.getElementById('previewFrame');
+                    const res = frame.contentWindow.eval(code);
+                    addLog(res === undefined ? 'undefined' : String(res), 'log');
+                } catch (err) {
+                    addLog(err.message, 'error');
+                }
+                e.target.value = '';
+            }
+        }
+        
+        // Console Resize
+        function initConsoleResize() {
+            let resizing = false;
+            let startY, startH;
+            
+            document.getElementById('consoleResize').addEventListener('mousedown', (e) => {
+                resizing = true;
+                startY = e.clientY;
+                startH = document.getElementById('consoleWrapper').offsetHeight;
+                e.preventDefault();
+            });
+            
+            document.addEventListener('mousemove', (e) => {
+                if (!resizing) return;
+                const h = startH - (e.clientY - startY);
+                document.getElementById('consoleWrapper').style.height = Math.max(100, Math.min(400, h)) + 'px';
+            });
+            
+            document.addEventListener('mouseup', () => resizing = false);
+        }
+        
+        // Pinch Zoom for Editor
+        function initPinchZoom() {
+            let initialDist = 0;
+            let initialSize = 14;
+            
+            document.addEventListener('touchstart', (e) => {
+                if (e.touches.length === 2) {
+                    initialDist = Math.hypot(
+                        e.touches[0].pageX - e.touches[1].pageX,
+                        e.touches[0].pageY - e.touches[1].pageY
+                    );
+                    initialSize = fontSize;
+                }
+            });
+            
+            document.addEventListener('touchmove', (e) => {
+                if (e.touches.length === 2) {
+                    e.preventDefault();
+                    const dist = Math.hypot(
+                        e.touches[0].pageX - e.touches[1].pageX,
+                        e.touches[0].pageY - e.touches[1].pageY
+                    );
+                    const scale = dist / initialDist;
+                    fontSize = Math.max(10, Math.min(24, initialSize * scale));
+                    Object.values(editors).forEach(ed => ed.setFontSize(fontSize));
+                }
+            });
+        }
+    </script>
+</body>
+</html>
