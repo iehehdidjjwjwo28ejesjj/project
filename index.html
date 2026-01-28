@@ -450,7 +450,10 @@ btn.addEventListener('click', () => {
                 editors[type].on('change', () => {
                     clearTimeout(fileUpdateTimeout);
                     fileUpdateTimeout = setTimeout(() => {
-                        sendFileChange(currentFile, editors[currentFile].getValue());
+                        const content = editors[currentFile].getValue();
+                        if (content) {
+                            sendFileChange(currentFile, content);
+                        }
                         if (isRunning) updatePreview();
                     }, 300);
                 });
@@ -459,7 +462,9 @@ btn.addEventListener('click', () => {
             const sendCursorUpdate = () => {
                 if (userId && editors[currentFile]) {
                     const pos = editors[currentFile].selection.getCursor();
-                    sendCursor(currentFile, pos.row, pos.column);
+                    if (pos && typeof pos.row === 'number' && typeof pos.column === 'number') {
+                        sendCursor(currentFile, pos.row, pos.column);
+                    }
                 }
             };
             
@@ -488,13 +493,18 @@ btn.addEventListener('click', () => {
             const usersRef = window.ref(window.db, 'users');
             
             window.onDisconnect(userRef).remove();
-            window.set(userRef, { name: userName, color: userColor, cursor: { file: 'html', row: 0, column: 0 }, timestamp: window.serverTimestamp() });
+            window.set(userRef, { 
+                name: userName, 
+                color: userColor, 
+                cursor: { file: 'html', row: 0, column: 0 }, 
+                lastActive: window.serverTimestamp() 
+            });
             
             window.get(filesRef).then(snapshot => {
                 if (snapshot.exists()) {
                     const files = snapshot.val();
                     ['html','css','js'].forEach(f => {
-                        if (files[f] && editors[f].getValue() !== files[f]) {
+                        if (files[f] && editors[f] && editors[f].getValue() !== files[f]) {
                             const pos = editors[f].selection.getCursor();
                             editors[f].setValue(files[f], -1);
                             editors[f].selection.moveTo(pos.row, pos.column);
@@ -508,7 +518,7 @@ btn.addEventListener('click', () => {
                 if (!snapshot.exists()) return;
                 const files = snapshot.val();
                 ['html','css','js'].forEach(f => {
-                    if (files[f] && editors[f].getValue() !== files[f]) {
+                    if (files[f] && editors[f] && editors[f].getValue() !== files[f]) {
                         const pos = editors[f].selection.getCursor();
                         editors[f].setValue(files[f], -1);
                         editors[f].selection.moveTo(pos.row, pos.column);
@@ -525,34 +535,28 @@ btn.addEventListener('click', () => {
                 const now = Date.now();
                 let activeCount = 0;
                 
+                removeAllRemoteCursors();
+                
                 Object.entries(users).forEach(([id, data]) => {
                     if (id !== userId) {
-                        const userTime = data.timestamp || 0;
+                        const userTime = data.lastActive ? new Date(data.lastActive).getTime() : 0;
                         const userAge = now - userTime;
-                        if (userAge < 30000) {
+                        
+                        if (userAge < 60000 && data.cursor) {
                             activeCount++;
-                            if (data.cursor && data.cursor.file === currentFile) {
-                                setTimeout(() => showRemoteCursor(id, data.name || 'User', data.cursor.file, data.cursor.row, data.cursor.column, data.color), 100);
+                            if (data.cursor.file === currentFile) {
+                                setTimeout(() => {
+                                    showRemoteCursor(id, data.name || 'User', data.cursor.file, data.cursor.row, data.cursor.column, data.color);
+                                }, 100);
                                 remoteUsers.set(id, data);
-                            } else if (data.cursor) {
-                                removeRemoteCursor(id);
                             }
-                        } else {
-                            removeRemoteCursor(id);
-                            remoteUsers.delete(id);
+                        } else if (userAge >= 60000) {
                             window.set(window.ref(window.db, 'users/' + id), null);
                         }
                     }
                 });
                 
                 updateCount(activeCount);
-                
-                remoteUsers.forEach((_, id) => {
-                    if (!users[id]) {
-                        removeRemoteCursor(id);
-                        remoteUsers.delete(id);
-                    }
-                });
             });
         }
 
@@ -563,7 +567,12 @@ btn.addEventListener('click', () => {
 
         function sendCursor(file, row, column) {
             if (!userId) return;
-            window.set(window.ref(window.db, 'users/' + userId + '/cursor'), { file, row, column, timestamp: window.serverTimestamp() });
+            window.set(window.ref(window.db, 'users/' + userId), { 
+                name: userName, 
+                color: userColor, 
+                cursor: { file, row, column },
+                lastActive: window.serverTimestamp()
+            });
         }
 
         function removeUser() {
@@ -591,31 +600,34 @@ btn.addEventListener('click', () => {
             const container = editor.container;
             if (!container) return;
             
-            setTimeout(() => {
-                try {
-                    const coords = editor.renderer.textToScreenCoordinates(row, col);
-                    if (!coords || coords.pageX === undefined || coords.pageY === undefined) return;
-                    
-                    const containerRect = container.getBoundingClientRect();
-                    const left = coords.pageX - containerRect.left;
-                    const top = coords.pageY - containerRect.top;
-                    
-                    const el = document.createElement('div');
-                    el.id = 'cursor-' + uid; 
-                    el.className = 'remote-cursor';
-                    el.style.left = Math.max(0, left) + 'px'; 
-                    el.style.top = Math.max(0, top) + 'px';
-                    el.innerHTML = `<div class="remote-caret" style="background:${color};"></div><div class="cursor-label" style="background:${color};">${name}</div>`;
-                    container.appendChild(el);
-                } catch (e) {
-                    console.error('Cursor error:', e);
-                }
-            }, 50);
+            try {
+                const coords = editor.renderer.textToScreenCoordinates(row, col);
+                if (!coords || coords.pageX === undefined || coords.pageY === undefined) return;
+                
+                const containerRect = container.getBoundingClientRect();
+                const left = coords.pageX - containerRect.left;
+                const top = coords.pageY - containerRect.top;
+                
+                const el = document.createElement('div');
+                el.id = 'cursor-' + uid; 
+                el.className = 'remote-cursor';
+                el.style.left = Math.max(0, left) + 'px'; 
+                el.style.top = Math.max(0, top) + 'px';
+                el.innerHTML = `<div class="remote-caret" style="background:${color};"></div><div class="cursor-label" style="background:${color};">${name}</div>`;
+                container.appendChild(el);
+            } catch (e) {
+                console.error('Cursor error:', e);
+            }
         }
         
         function removeRemoteCursor(uid) { 
             const el = document.getElementById('cursor-' + uid); 
             if (el) el.remove(); 
+        }
+
+        function removeAllRemoteCursors() {
+            remoteUsers.forEach((_, id) => removeRemoteCursor(id));
+            remoteUsers.clear();
         }
 
         function switchFile(type) {
@@ -634,15 +646,15 @@ btn.addEventListener('click', () => {
             document.getElementById('dropdownMenu').classList.remove('open');
             
             setTimeout(() => {
-                editors[type].resize();
-                updateRemoteCursors();
+                if (editors[type]) {
+                    editors[type].resize();
+                    updateRemoteCursors();
+                }
             }, 100);
         }
 
         function updateRemoteCursors() {
             if (!userId) return;
-            
-            removeAllRemoteCursors();
             
             window.ref(window.db, 'users').once('value').then(snapshot => {
                 if (!snapshot.exists()) return;
@@ -652,14 +664,11 @@ btn.addEventListener('click', () => {
                         setTimeout(() => {
                             showRemoteCursor(id, data.name || 'User', data.cursor.file, data.cursor.row, data.cursor.column, data.color);
                         }, 150);
+                    } else if (id !== userId && data.cursor) {
+                        removeRemoteCursor(id);
                     }
                 });
             });
-        }
-
-        function removeAllRemoteCursors() {
-            remoteUsers.forEach((_, id) => removeRemoteCursor(id));
-            remoteUsers.clear();
         }
 
         function toggleDropdown() { 
