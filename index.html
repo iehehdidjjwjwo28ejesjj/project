@@ -132,7 +132,7 @@
         .ace_editor { font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace !important; position: relative; }
         
         .remote-cursor {
-            position: absolute; width: 2px; height: 20px;
+            position: absolute; width: 2px; height: 24px;
             pointer-events: none; z-index: 50; transition: all 0.1s ease-out;
         }
         .remote-caret { width: 100%; height: 100%; animation: blink 1s infinite; }
@@ -210,6 +210,17 @@
         .name-modal-buttons {
             display: flex; gap: 8px; justify-content: flex-end;
         }
+        .color-picker {
+            display: flex; gap: 8px; margin: 16px 0; flex-wrap: wrap;
+            justify-content: center;
+        }
+        .color-option {
+            width: 32px; height: 32px; border-radius: 50%; cursor: pointer;
+            border: 3px solid transparent; transition: all 0.2s;
+        }
+        .color-option.selected {
+            border-color: white; transform: scale(1.1);
+        }
     </style>
 </head>
 <body>
@@ -217,6 +228,17 @@
         <div class="name-modal-content">
             <div class="name-modal-title">Введите ваше имя</div>
             <input type="text" class="name-modal-input" id="nameInput" placeholder="Ваше имя..." maxlength="20">
+            <div class="name-modal-title" style="font-size: 16px; margin-top: 16px;">Выберите цвет курсора</div>
+            <div class="color-picker" id="colorPicker">
+                <div class="color-option" style="background: #ff0000;" data-color="#ff0000"></div>
+                <div class="color-option" style="background: #00ff00;" data-color="#00ff00"></div>
+                <div class="color-option" style="background: #0000ff;" data-color="#0000ff"></div>
+                <div class="color-option" style="background: #ffff00;" data-color="#ffff00"></div>
+                <div class="color-option" style="background: #ff00ff;" data-color="#ff00ff"></div>
+                <div class="color-option" style="background: #00ffff;" data-color="#00ffff"></div>
+                <div class="color-option" style="background: #ff8800;" data-color="#ff8800"></div>
+                <div class="color-option" style="background: #8800ff;" data-color="#8800ff"></div>
+            </div>
             <div class="name-modal-buttons">
                 <button onclick="saveName()">Сохранить</button>
             </div>
@@ -359,8 +381,8 @@ btn.addEventListener('click', () => {
     <script>
         let editors = {}, userId = null, remoteUsers = new Map();
         let isRunning = false, isConsoleOpen = false, currentFile = 'html';
-        let fontSize = 16, userName = '';
-        let fileUpdateTimeout = null;
+        let fontSize = 16, userName = '', userColor = '';
+        let fileUpdateTimeout = null, cursorSendTimeout = null;
 
         window.onload = () => {
             checkUserName();
@@ -371,13 +393,35 @@ btn.addEventListener('click', () => {
 
         function checkUserName() {
             const savedName = localStorage.getItem('syncCodeUserName');
-            if (savedName) {
+            const savedColor = localStorage.getItem('syncCodeUserColor');
+            if (savedName && savedColor) {
                 userName = savedName;
+                userColor = savedColor;
                 setupFirebase();
             } else {
                 document.getElementById('nameModal').style.display = 'flex';
                 document.getElementById('nameInput').focus();
+                initColorPicker();
             }
+        }
+
+        function initColorPicker() {
+            const colors = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff', '#ff8800', '#8800ff'];
+            const savedColor = localStorage.getItem('syncCodeUserColor') || colors[0];
+            document.querySelectorAll('.color-option').forEach(el => {
+                el.onclick = () => selectColor(el.dataset.color);
+                if (el.dataset.color === savedColor) {
+                    el.classList.add('selected');
+                }
+            });
+            userColor = savedColor;
+        }
+
+        function selectColor(color) {
+            document.querySelectorAll('.color-option').forEach(el => el.classList.remove('selected'));
+            document.querySelector(`[data-color="${color}"]`).classList.add('selected');
+            userColor = color;
+            localStorage.setItem('syncCodeUserColor', color);
         }
 
         function saveName() {
@@ -412,12 +456,25 @@ btn.addEventListener('click', () => {
                 });
             });
             
-            setInterval(() => {
-                if (userId) {
+            const sendCursorUpdate = () => {
+                if (userId && editors[currentFile]) {
                     const pos = editors[currentFile].selection.getCursor();
                     sendCursor(currentFile, pos.row, pos.column);
                 }
-            }, 100);
+            };
+            
+            ['html', 'css', 'js'].forEach(type => {
+                editors[type].on('changeSelection', () => {
+                    if (type === currentFile) {
+                        clearTimeout(cursorSendTimeout);
+                        cursorSendTimeout = setTimeout(sendCursorUpdate, 50);
+                    }
+                });
+            });
+            
+            window.addEventListener('resize', () => {
+                setTimeout(updateRemoteCursors, 100);
+            });
         }
 
         function setupFirebase() {
@@ -426,14 +483,12 @@ btn.addEventListener('click', () => {
             userId = localStorage.getItem('firebaseUserId') || 'user_' + Math.random().toString(36).substr(2, 9);
             localStorage.setItem('firebaseUserId', userId);
             
-            const userColor = '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
-            
             const userRef = window.ref(window.db, 'users/' + userId);
             const filesRef = window.ref(window.db, 'files');
             const usersRef = window.ref(window.db, 'users');
             
             window.onDisconnect(userRef).remove();
-            window.set(userRef, { name: userName, color: userColor, cursor: { file: 'html', row: 0, column: 0 } });
+            window.set(userRef, { name: userName, color: userColor, cursor: { file: 'html', row: 0, column: 0 }, timestamp: window.serverTimestamp() });
             
             window.get(filesRef).then(snapshot => {
                 if (snapshot.exists()) {
@@ -467,18 +522,30 @@ btn.addEventListener('click', () => {
                     return;
                 }
                 const users = snapshot.val();
-                const userIds = Object.keys(users);
-                updateCount(userIds.length - 1);
+                const now = Date.now();
+                let activeCount = 0;
                 
                 Object.entries(users).forEach(([id, data]) => {
-                    if (id !== userId && data.cursor) {
-                        showRemoteCursor(id, data.name || 'User', data.cursor.file, data.cursor.row, data.cursor.column, data.color);
-                        remoteUsers.set(id, data);
-                    } else if (id !== userId) {
-                        removeRemoteCursor(id);
-                        remoteUsers.delete(id);
+                    if (id !== userId) {
+                        const userTime = data.timestamp || 0;
+                        const userAge = now - userTime;
+                        if (userAge < 30000) {
+                            activeCount++;
+                            if (data.cursor && data.cursor.file === currentFile) {
+                                setTimeout(() => showRemoteCursor(id, data.name || 'User', data.cursor.file, data.cursor.row, data.cursor.column, data.color), 100);
+                                remoteUsers.set(id, data);
+                            } else if (data.cursor) {
+                                removeRemoteCursor(id);
+                            }
+                        } else {
+                            removeRemoteCursor(id);
+                            remoteUsers.delete(id);
+                            window.set(window.ref(window.db, 'users/' + id), null);
+                        }
                     }
                 });
+                
+                updateCount(activeCount);
                 
                 remoteUsers.forEach((_, id) => {
                     if (!users[id]) {
@@ -514,23 +581,36 @@ btn.addEventListener('click', () => {
         
         function showRemoteCursor(uid, name, file, row, col, color) {
             if (file !== currentFile) return;
+            
             const old = document.getElementById('cursor-' + uid); 
             if (old) old.remove();
+            
             const editor = editors[file];
-            const session = editor.session;
-            const pos = session.documentToScreenPosition(row, col);
-            const pixelPos = editor.renderer.textToPixelCoordinates(pos.row, pos.column);
-            const el = document.createElement('div');
-            el.id = 'cursor-' + uid; 
-            el.className = 'remote-cursor';
+            if (!editor || !editor.renderer) return;
             
-            if (pixelPos) {
-                el.style.left = pixelPos.left + 'px'; 
-                el.style.top = pixelPos.top + 'px';
-            }
+            const container = editor.container;
+            if (!container) return;
             
-            el.innerHTML = `<div class="remote-caret" style="background:${color};"></div><div class="cursor-label" style="background:${color};">${name}</div>`;
-            editor.container.appendChild(el);
+            setTimeout(() => {
+                try {
+                    const coords = editor.renderer.textToScreenCoordinates(row, col);
+                    if (!coords || coords.pageX === undefined || coords.pageY === undefined) return;
+                    
+                    const containerRect = container.getBoundingClientRect();
+                    const left = coords.pageX - containerRect.left;
+                    const top = coords.pageY - containerRect.top;
+                    
+                    const el = document.createElement('div');
+                    el.id = 'cursor-' + uid; 
+                    el.className = 'remote-cursor';
+                    el.style.left = Math.max(0, left) + 'px'; 
+                    el.style.top = Math.max(0, top) + 'px';
+                    el.innerHTML = `<div class="remote-caret" style="background:${color};"></div><div class="cursor-label" style="background:${color};">${name}</div>`;
+                    container.appendChild(el);
+                } catch (e) {
+                    console.error('Cursor error:', e);
+                }
+            }, 50);
         }
         
         function removeRemoteCursor(uid) { 
@@ -552,7 +632,34 @@ btn.addEventListener('click', () => {
             iconEl.textContent = icons[type]; 
             iconEl.className = 'file-icon ' + colors[type];
             document.getElementById('dropdownMenu').classList.remove('open');
-            setTimeout(() => editors[type].resize(), 50);
+            
+            setTimeout(() => {
+                editors[type].resize();
+                updateRemoteCursors();
+            }, 100);
+        }
+
+        function updateRemoteCursors() {
+            if (!userId) return;
+            
+            removeAllRemoteCursors();
+            
+            window.ref(window.db, 'users').once('value').then(snapshot => {
+                if (!snapshot.exists()) return;
+                const users = snapshot.val();
+                Object.entries(users).forEach(([id, data]) => {
+                    if (id !== userId && data.cursor && data.cursor.file === currentFile) {
+                        setTimeout(() => {
+                            showRemoteCursor(id, data.name || 'User', data.cursor.file, data.cursor.row, data.cursor.column, data.color);
+                        }, 150);
+                    }
+                });
+            });
+        }
+
+        function removeAllRemoteCursors() {
+            remoteUsers.forEach((_, id) => removeRemoteCursor(id));
+            remoteUsers.clear();
         }
 
         function toggleDropdown() { 
@@ -689,8 +796,12 @@ try { ${editors.js.getValue()} } catch(e) { console.error(e.message); }
                 const dist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
                 fontSize = Math.max(10, Math.min(28, Math.round(initialSize * (dist / initialDist))));
                 Object.values(editors).forEach(ed => ed.setFontSize(fontSize));
+                setTimeout(updateRemoteCursors, 100);
             }, {passive: false});
-            document.addEventListener('touchend', () => { isPinching = false; });
+            document.addEventListener('touchend', () => { 
+                isPinching = false; 
+                setTimeout(updateRemoteCursors, 100);
+            });
         }
         
         window.addEventListener('beforeunload', () => {
