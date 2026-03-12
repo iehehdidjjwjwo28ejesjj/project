@@ -11,14 +11,16 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.2/mode-html.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.2/mode-css.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.2/mode-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.2/mode-scss.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.2/theme-monokai.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.2/ext-language_tools.min.js"></script>
-    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.2/ext-emmet.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/emmet@2.4.2/dist/emmet.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sass.js/0.11.1/sass.sync.min.js"></script>
+
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-        
         html, body { height: 100%; overflow: hidden; position: fixed; width: 100%; touch-action: pan-x pan-y; }
-        
         body { 
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: #0d1117; 
@@ -26,7 +28,7 @@
             display: flex;
             flex-direction: column;
         }
-        
+
         .toolbar { 
             height: 60px; 
             background: #161b22; 
@@ -36,21 +38,31 @@
             padding: 0 12px; 
             gap: 8px;
             flex-shrink: 0;
+            z-index: 300;
+            position: relative;
         }
         
+        iframe.resizing {
+    pointer-events: none;
+}
+
+.console-resize {
+    touch-action: none;
+}
+
         .toolbar-left {
             display: flex;
             align-items: center;
             gap: 8px;
             flex: 1;
         }
-        
+
         .toolbar-right {
             display: flex;
             align-items: center;
             gap: 8px;
         }
-        
+
         button { 
             background: #21262d; 
             border: 1px solid #30363d; 
@@ -66,15 +78,81 @@
             justify-content: center;
             gap: 6px;
             touch-action: manipulation;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        button::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.1);
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+
+        button:active::before {
+            width: 300px;
+            height: 300px;
+        }
+
+        button:hover { 
+            background: #30363d; 
+            border-color: #8b949e; 
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+        button:active { transform: translateY(0) scale(0.95); }
+        
+        .btn-primary { 
+            background: #238636; 
+            border-color: #238636; 
+            box-shadow: 0 4px 12px rgba(35, 134, 54, 0.3);
+        }
+        .btn-primary:hover { 
+            background: #2ea043; 
+            border-color: #2ea043; 
+            box-shadow: 0 6px 16px rgba(35, 134, 54, 0.4);
+        }
+        .btn-stop { 
+            background: #da3633; 
+            border-color: #da3633;
+            box-shadow: 0 4px 12px rgba(218, 54, 51, 0.3);
+        }
+        .btn-stop:hover { 
+            background: #f85149; 
+            border-color: #f85149;
+            box-shadow: 0 6px 16px rgba(218, 54, 51, 0.4);
+        }
+        .btn-yellow { 
+            background: #d29922; 
+            border-color: #d29922; 
+            color: black;
+            box-shadow: 0 4px 12px rgba(210, 153, 34, 0.3);
+        }
+        .btn-yellow:hover { 
+            background: #e3b341; 
+            border-color: #e3b341;
+            box-shadow: 0 6px 16px rgba(210, 153, 34, 0.4);
+        }
+        .btn-yellow.active { 
+            background: #e3b341; 
+            box-shadow: 0 0 16px rgba(210, 153, 34, 0.6);
+            animation: pulse-yellow 2s infinite;
         }
         
-        button:active { transform: scale(0.95); background: #30363d; }
-        .btn-primary { background: #238636; border-color: #238636; }
-        .btn-stop { background: #da3633; border-color: #da3633; }
-        .btn-yellow { background: #d29922; border-color: #d29922; color: black; }
-        .btn-yellow.active { background: #e3b341; }
-        .btn-icon { padding: 0; width: 44px; }
+        @keyframes pulse-yellow {
+            0%, 100% { box-shadow: 0 0 16px rgba(210, 153, 34, 0.6); }
+            50% { box-shadow: 0 0 24px rgba(210, 153, 34, 0.8); }
+        }
         
+        .btn-icon { padding: 0; width: 44px; }
+
         .status {
             font-size: 13px;
             color: #8b949e;
@@ -86,163 +164,746 @@
             border-radius: 8px;
             height: 44px;
             border: 1px solid #30363d;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
         }
-        
-        .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #666; }
-        .status-dot.online { background: #3fb950; box-shadow: 0 0 8px #3fb950; }
+
+        .status::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+            transition: left 0.5s;
+        }
+
+        .status:hover::before {
+            left: 100%;
+        }
+
+        .status:hover {
+            background: #30363d;
+            border-color: #58a6ff;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #666; transition: all 0.3s ease; }
+        .status-dot.online { background: #3fb950; box-shadow: 0 0 8px #3fb950; animation: pulse-dot 2s infinite; }
         .status-dot.offline { background: #da3633; }
         .status-dot.connecting { background: #d29922; animation: blink 1s infinite; }
-        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
         
+        @keyframes pulse-dot {
+            0%, 100% { box-shadow: 0 0 8px #3fb950; }
+            50% { box-shadow: 0 0 16px #3fb950; }
+        }
+        
+        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
         .dropdown { position: relative; min-width: 140px; }
         .dropdown-trigger { 
             width: 100%; background: #21262d; border: 1px solid #30363d; color: #f0f6fc; 
             border-radius: 8px; height: 44px; padding: 0 10px; 
             display: flex; align-items: center; justify-content: space-between; 
             cursor: pointer; font-size: 14px; gap: 8px;
+            transition: all 0.2s ease;
         }
+        .dropdown-trigger:hover { background: #30363d; border-color: #58a6ff; }
         .dropdown-trigger > div { display: flex; align-items: center; gap: 8px; }
         .dropdown-menu { 
             position: absolute; top: 100%; left: 0; right: 0; margin-top: 4px; 
             background: #161b22; border: 1px solid #30363d; border-radius: 8px; 
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5); display: none; z-index: 1000;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5); 
+            opacity: 0;
+            transform: translateY(-10px) scale(0.95);
+            pointer-events: none;
+            z-index: 1000;
             overflow: hidden;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
         }
-        .dropdown-menu.open { display: block; }
+        .dropdown-menu.open { 
+            opacity: 1;
+            transform: translateY(0) scale(1);
+            pointer-events: auto;
+        }
         .dropdown-item { 
             padding: 10px 12px; cursor: pointer; display: flex; align-items: center; 
-            gap: 8px; font-size: 13px; border-bottom: 1px solid #30363d; 
+            gap: 8px; font-size: 13px; border-bottom: 1px solid #30363d;
+            transition: all 0.15s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        .dropdown-item::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 0;
+            background: linear-gradient(90deg, rgba(88, 166, 255, 0.1), transparent);
+            transition: width 0.3s ease;
+        }
+        .dropdown-item:hover::before {
+            width: 100%;
         }
         .dropdown-item:last-child { border-bottom: none; }
-        .dropdown-item:hover { background: #21262d; }
-        .dropdown-item.active { background: #238636; color: white; }
-        
+        .dropdown-item:hover { padding-left: 16px; background: transparent; }
+        .dropdown-item.active { 
+            background: rgba(35, 134, 54, 0.1); 
+            color: #3fb950; 
+            border-left: 3px solid #238636;
+        }
+
+        .rotate-180 {
+            transform: rotate(180deg);
+        }
+
         .file-icon {
             width: 20px; height: 20px; border-radius: 4px;
             display: flex; align-items: center; justify-content: center;
             font-size: 11px; font-weight: bold; flex-shrink: 0;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .dropdown-item:hover .file-icon { 
+            transform: scale(1.1) rotate(5deg); 
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
         }
         .html-icon { background: #e34c26; color: white; }
         .css-icon { background: #264de4; color: white; }
         .js-icon { background: #f7df1e; color: black; }
-        
+        .scss-icon { background: #cc6699; color: white; }
+
         .editor-container { flex: 1; position: relative; overflow: hidden; }
-        .editor-pane { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: none; }
-        .editor-pane.active { display: block; }
-        .ace_editor { font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace !important; position: relative; }
+        .editor-pane { 
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0; 
+            display: none; 
+            opacity: 0;
+            transform: translateX(20px);
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+        .editor-pane.active { 
+            display: block; 
+            opacity: 1;
+            transform: translateX(0);
+            animation: slideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
         
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(30px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        .ace_editor { font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace !important; }
+
+        /* ИСПРАВЛЕНИЕ #2: Синхронизация line-height для правильной нумерации */
+        .ace_gutter {
+            background: #0d1117 !important;
+            border-right: 1px solid #21262d !important;
+            z-index: 10 !important;
+        }
+        
+        .ace_gutter-cell {
+    color: #484f58;
+}
+        
+        .ace_gutter-cell:hover {
+            color: #c9d1d9 !important;
+            background: rgba(48, 54, 61, 0.4);
+        }
+        
+        .ace_gutter-active-line {
+            background: rgba(35, 134, 54, 0.15) !important;
+            border-left: 2px solid #238636;
+        }
+
+        /* ИСПРАВЛЕНИЕ #1: Правильное позиционирование курсоров с учетом скролла */
         .remote-cursor {
-            position: absolute; width: 2px; height: 24px;
-            pointer-events: none; z-index: 50; transition: all 0.1s ease-out;
-        }
-        .remote-caret { width: 100%; height: 100%; animation: blink 1s infinite; }
-        .cursor-label {
-            position: absolute; top: -22px; left: 0; padding: 2px 8px; border-radius: 4px;
-            font-size: 12px; font-weight: bold; color: black; white-space: nowrap;
+            position: absolute; 
+            width: 2px; 
+            pointer-events: none; 
+            z-index: 50;
+            transition: all 0.15s ease-out;
         }
         
+        .remote-caret { 
+            width: 100%; 
+            height: 100%; 
+            animation: blink-caret 1.2s infinite; 
+            box-shadow: 0 0 4px currentColor;
+        }
+        
+        @keyframes blink-caret {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+        
+        .cursor-label {
+            position: absolute; 
+            top: -24px; 
+            left: 0; 
+            padding: 3px 8px; 
+            border-radius: 4px;
+            font-size: 11px; 
+            font-weight: bold; 
+            color: black; 
+            white-space: nowrap;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+            animation: label-in 0.3s ease;
+            z-index: 51;
+        }
+        
+        @keyframes label-in {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ИСПРАВЛЕНИЕ #5: Индикаторы участников в gutter */
+        .gutter-user-indicator {
+            position: absolute;
+            left: 5px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 9px;
+            font-weight: bold;
+            color: black;
+            box-shadow: 0 0 4px currentColor;
+            z-index: 20;
+            animation: indicator-pulse 2s infinite;
+        }
+
+        @keyframes indicator-pulse {
+            0%, 100% { transform: translateY(-50%) scale(1); }
+            50% { transform: translateY(-50%) scale(1.1); }
+        }
+
+        .gutter-error {
+            position: absolute;
+            left: 5px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 16px;
+            height: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            font-size: 10px;
+            font-weight: bold;
+            color: white;
+        }
+
+        .gutter-error-error { background: #f85149; }
+        .gutter-error-warning { background: #d29922; }
+        .gutter-error-info { background: #58a6ff; }
+
+        .line-highlight-anim {
+            position: absolute;
+            left: 0;
+            right: 0;
+            background: rgba(88, 166, 255, 0.2);
+            pointer-events: none;
+            z-index: 5;
+            animation: fadeHighlight 1.5s ease forwards;
+        }
+        
+        @keyframes fadeHighlight {
+            0% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+
+        @keyframes blink-line {
+            0%, 100% { background: transparent; }
+            50% { background: var(--blink-color); }
+        }
+
+        .blink-line {
+            animation: blink-line 0.3s ease 3;
+        }
+
         .preview-overlay { 
             position: fixed; top: 60px; left: 0; right: 0; bottom: 0; 
             background: white; z-index: 90; display: none; flex-direction: column; 
+            opacity: 0;
+            transform: scale(0.95);
+            transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1), transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
         }
-        .preview-overlay.active { display: flex; }
+        .preview-overlay.active { 
+            display: flex; 
+            opacity: 1;
+            transform: scale(1);
+        }
         iframe { flex: 1; border: none; width: 100%; background: white; }
-        
+
+        /* ИСПРАВЛЕНИЕ #3: Оптимизированный ресайз консоли */
         .console-wrapper { 
             position: fixed; left: 0; right: 0; bottom: 0; height: 0; 
             background: #161b22; border-top: 2px solid #30363d; 
-            display: flex; flex-direction: column; z-index: 95; 
-            transition: height 0.25s ease-out;
+            display: flex; flex-direction: column; z-index: 200; 
+            transition: height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 -4px 20px rgba(0,0,0,0.4);
+            will-change: height;
         }
         .console-wrapper.open { height: 40vh; min-height: 200px; max-height: 70vh; }
-        
+
         .console-resize { 
-            height: 24px; background: #21262d; cursor: row-resize; 
+            height: 20px; background: #21262d; cursor: row-resize; 
             display: flex; align-items: center; justify-content: center; 
             border-bottom: 1px solid #30363d; touch-action: none;
+            transition: background 0.2s ease;
+            position: relative;
         }
-        .console-resize:active { background: #30363d; }
-        .console-resize::after { content: '━━━'; color: #484f58; font-size: 14px; letter-spacing: 2px; }
-        
+        .console-resize:hover { background: #30363d; }
+        .console-resize:active { background: #3d444d; }
+        .console-resize::after { content: '━━━'; color: #484f58; font-size: 14px; letter-spacing: 2px; transition: all 0.2s ease; }
+        .console-resize:hover::after { color: #8b949e; letter-spacing: 4px; }
+
         .console-header { 
             height: 44px; background: #21262d; display: flex; align-items: center; 
             padding: 0 12px; font-size: 14px; color: #8b949e; 
             border-bottom: 1px solid #30363d; justify-content: space-between; flex-shrink: 0;
         }
+
+        /* ИСПРАВЛЕНИЕ #4: Фильтр открывается вверх */
+        .console-filter-dropdown { position: relative; }
+        
+        .console-filter-trigger {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            color: #c9d1d9;
+            transition: all 0.2s ease;
+        }
+
+        .console-filter-trigger:hover { border-color: #58a6ff; background: #161b22; }
+
+        .console-filter-menu {
+            position: absolute;
+            bottom: 100%;
+            right: 0;
+            margin-bottom: 8px;
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            box-shadow: 0 -10px 30px rgba(0,0,0,0.5);
+            min-width: 160px;
+            opacity: 0;
+            transform: translateY(10px) scale(0.95);
+            pointer-events: none;
+            z-index: 201;
+            overflow: hidden;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .console-filter-menu.open {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+            pointer-events: auto;
+        }
+
+        .console-filter-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            cursor: pointer;
+            font-size: 13px;
+            border-bottom: 1px solid #21262d;
+            transition: all 0.15s ease;
+            color: #c9d1d9;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .console-filter-item:last-child { border-bottom: none; }
+        .console-filter-item:hover { background: #21262d; }
+
+        .console-filter-checkbox {
+            width: 16px;
+            height: 16px;
+            border: 1px solid #484f58;
+            border-radius: 3px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            flex-shrink: 0;
+            background: transparent;
+            position: relative;
+        }
+
+        .console-filter-checkbox svg {
+            transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            transform: scale(0);
+        }
+
+        .console-filter-item.active .console-filter-checkbox {
+            background: #238636;
+            border-color: #238636;
+        }
+
+        .console-filter-item.active .console-filter-checkbox svg {
+            transform: scale(1);
+        }
+
+        .console-filter-item.all-item {
+            border-bottom: 2px solid #30363d;
+            font-weight: 600;
+            background: #0d1117;
+        }
+
         .console-body { 
             flex: 1; overflow-y: auto; padding: 10px; 
-            font-family: monospace; font-size: 14px; line-height: 1.5;
+            font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 13px; line-height: 1.6;
             -webkit-overflow-scrolling: touch;
         }
-        .console-line { padding: 4px 0; display: flex; gap: 8px; border-bottom: 1px solid #21262d; word-break: break-word; }
-        .console-log { color: #c9d1d9; }
-        .console-error { color: #f85149; }
-        .console-time { color: #6e7681; flex-shrink: 0; font-size: 12px; }
-        .console-input-line { 
-            display: flex; gap: 10px; padding: 10px 12px; 
-            border-top: 2px solid #30363d; background: #0d1117; flex-shrink: 0;
+        
+        .console-line { 
+            padding: 4px 8px; 
+            display: flex; 
+            gap: 10px; 
+            border-left: 2px solid transparent;
+            border-radius: 0 4px 4px 0;
+            margin-bottom: 2px;
+            animation: line-in 0.3s ease;
+            transition: all 0.2s ease;
         }
-        .console-prompt { color: #3fb950; font-weight: bold; font-size: 16px; }
+        
+        @keyframes line-in {
+            from { opacity: 0; transform: translateX(-10px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        
+        .console-line.hidden { 
+            display: none;
+        }
+        
+        .console-line:hover {
+            background: rgba(48, 54, 61, 0.3);
+            transform: translateX(4px);
+        }
+        
+        .console-log { color: #c9d1d9; }
+        .console-error { color: #f85149; border-left-color: #f85149; background: rgba(248, 81, 73, 0.05); }
+        .console-warn { color: #d29922; border-left-color: #d29922; background: rgba(210, 153, 34, 0.05); }
+        .console-info { color: #58a6ff; border-left-color: #58a6ff; background: rgba(88, 166, 255, 0.05); }
+        .console-time { color: #6e7681; flex-shrink: 0; font-size: 11px; min-width: 55px; }
+        
+        .console-input-line { 
+            display: flex; gap: 10px; padding: 12px; 
+            border-top: 1px solid #30363d; background: #0d1117; flex-shrink: 0;
+        }
+        .console-prompt { 
+            color: #3fb950; 
+            font-weight: bold; 
+            font-size: 16px; 
+            animation: pulse-prompt 2s infinite;
+        }
+        
+        @keyframes pulse-prompt {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+        
         .console-input { 
             background: transparent; border: none; color: #c9d1d9; 
-            font-family: monospace; font-size: 15px; flex: 1; outline: none;
+            font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 14px; flex: 1; outline: none;
+            transition: all 0.2s ease;
         }
-        .empty-state { text-align: center; color: #484f58; padding: 20px; }
         
+        .console-input:focus {
+            color: #fff;
+        }
+        
+        .empty-state { 
+            text-align: center; color: #484f58; padding: 40px 20px; font-style: italic;
+            animation: fadeIn 0.5s ease;
+        }
+
         .name-modal {
             position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.8); z-index: 2000; display: flex;
+            background: rgba(0,0,0,0.85); z-index: 2000; display: flex;
             align-items: center; justify-content: center;
+            backdrop-filter: blur(8px);
+            animation: fadeIn 0.3s ease;
         }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
         .name-modal-content {
-            background: #161b22; border: 1px solid #30363d; border-radius: 12px;
-            padding: 24px; width: 90%; max-width: 400px;
+            background: #161b22; border: 1px solid #30363d; border-radius: 16px;
+            padding: 32px; width: 90%; max-width: 400px;
+            animation: slideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
         }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(30px) scale(0.95); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
         .name-modal-title {
-            font-size: 20px; font-weight: 600; margin-bottom: 16px; color: #f0f6fc;
+            font-size: 22px; font-weight: 600; margin-bottom: 20px; color: #f0f6fc;
+            display: flex; align-items: center; gap: 10px;
         }
+        
+        .name-modal-title svg { color: #58a6ff; }
+        
         .name-modal-input {
             width: 100%; background: #0d1117; border: 1px solid #30363d;
-            color: #c9d1d9; padding: 12px; border-radius: 8px; font-size: 16px;
-            margin-bottom: 16px; outline: none;
+            color: #c9d1d9; padding: 14px; border-radius: 10px; font-size: 16px;
+            margin-bottom: 20px; outline: none; transition: all 0.2s ease;
         }
-        .name-modal-input:focus { border-color: #238636; }
-        .name-modal-buttons {
-            display: flex; gap: 8px; justify-content: flex-end;
+        .name-modal-input:focus { 
+            border-color: #238636; 
+            box-shadow: 0 0 0 3px rgba(35, 134, 54, 0.2);
+            transform: translateY(-1px);
         }
+        
+        .name-modal-buttons { display: flex; gap: 8px; justify-content: flex-end; }
+        
         .color-picker {
-            display: flex; gap: 8px; margin: 16px 0; flex-wrap: wrap;
+            display: flex; gap: 10px; margin: 20px 0; flex-wrap: wrap;
             justify-content: center;
         }
+        
         .color-option {
-            width: 32px; height: 32px; border-radius: 50%; cursor: pointer;
-            border: 3px solid transparent; transition: all 0.2s;
+            width: 36px; height: 36px; border-radius: 50%; cursor: pointer;
+            border: 3px solid transparent; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
         }
-        .color-option.selected {
-            border-color: white; transform: scale(1.1);
+        
+        .color-option:hover { 
+            transform: scale(1.2); 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3); 
+        }
+        .color-option.selected { 
+            border-color: white; 
+            transform: scale(1.1); 
+            box-shadow: 0 0 0 2px #161b22, 0 0 0 4px currentColor;
+            animation: selected-pulse 2s infinite;
+        }
+
+        @keyframes selected-pulse {
+            0%, 100% { box-shadow: 0 0 0 2px #161b22, 0 0 0 4px currentColor; }
+            50% { box-shadow: 0 0 0 2px #161b22, 0 0 0 6px currentColor; }
+        }
+
+        .toast-container {
+            position: fixed; top: 80px; right: 20px; z-index: 5000;
+            display: flex; flex-direction: column; gap: 8px; pointer-events: none;
+            width: 350px;
+        }
+
+        .toast {
+            background: #161b22; border: 1px solid #30363d; border-radius: 10px;
+            padding: 12px 16px; width: 100%;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.5);
+            display: flex; align-items: center; gap: 10px; pointer-events: auto;
+            opacity: 0; transform: translateX(400px);
+            animation: toastSlideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), margin-top 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .toast.removing { animation: toastSlideOut 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+
+        @keyframes toastSlideIn { to { opacity: 1; transform: translateX(0); } }
+        @keyframes toastSlideOut { to { opacity: 0; transform: translateX(400px); } }
+
+        .toast-icon {
+            width: 20px; height: 20px; flex-shrink: 0;
+            display: flex; align-items: center; justify-content: center; border-radius: 50%;
+            animation: icon-scale 0.3s ease;
+        }
+        
+        @keyframes icon-scale {
+            0% { transform: scale(0); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+
+        .toast.success .toast-icon { background: rgba(63, 185, 80, 0.2); color: #3fb950; }
+        .toast.error .toast-icon { background: rgba(248, 81, 73, 0.2); color: #f85149; }
+        .toast.info .toast-icon { background: rgba(88, 166, 255, 0.2); color: #58a6ff; }
+        .toast.warning .toast-icon { background: rgba(210, 153, 34, 0.2); color: #d29922; }
+
+        .toast-content { flex: 1; }
+        .toast-title { font-weight: 600; font-size: 13px; color: #f0f6fc; margin-bottom: 2px; }
+        .toast-message { font-size: 12px; color: #8b949e; line-height: 1.3; }
+
+        .toast-close {
+            width: 20px; height: 20px; cursor: pointer; color: #6e7681;
+            transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; border-radius: 4px;
+        }
+        .toast-close:hover { color: #c9d1d9; background: rgba(255,255,255,0.1); transform: rotate(90deg); }
+
+        .users-panel {
+            position: fixed; top: 60px; right: 0; width: 320px; height: calc(100% - 60px);
+            background: #161b22; border-left: 1px solid #30363d; z-index: 250;
+            transform: translateX(100%); transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex; flex-direction: column; box-shadow: -4px 0 20px rgba(0,0,0,0.4);
+        }
+
+        .users-panel.open { transform: translateX(0); }
+
+        .users-panel-header {
+            padding: 20px; border-bottom: 1px solid #30363d;
+            display: flex; align-items: center; justify-content: space-between;
+        }
+
+        .users-panel-title {
+            font-size: 16px; font-weight: 600; color: #f0f6fc;
+            display: flex; align-items: center; gap: 8px;
+        }
+
+        .users-panel-body { flex: 1; overflow-y: auto; padding: 12px; }
+
+        .user-item {
+            display: flex; align-items: center; gap: 12px; padding: 14px;
+            border-radius: 10px; margin-bottom: 8px; background: #0d1117;
+            border: 1px solid #21262d; transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer; position: relative; overflow: hidden;
+            animation: userIn 0.3s ease;
+        }
+
+        @keyframes userIn {
+            from { opacity: 0; transform: translateX(20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        .user-item::before {
+            content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 0;
+            background: linear-gradient(90deg, rgba(35, 134, 54, 0.3), transparent);
+            transition: width 0.3s ease;
+        }
+        .user-item:hover { 
+            background: #21262d; 
+            border-color: #30363d; 
+            transform: translateX(-4px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+        .user-item:hover::before { width: 100%; }
+
+        .user-avatar {
+            width: 42px; height: 42px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: bold; font-size: 16px; color: black; flex-shrink: 0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3); position: relative; z-index: 1;
+            transition: transform 0.3s ease;
+        }
+        
+        .user-item:hover .user-avatar {
+            transform: scale(1.1) rotate(5deg);
+        }
+
+        .user-info { flex: 1; position: relative; z-index: 1; }
+        .user-name { font-size: 14px; font-weight: 600; color: #f0f6fc; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+        .user-status { font-size: 12px; color: #8b949e; display: flex; align-items: center; gap: 6px; }
+        .user-file-badge { 
+            padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; 
+            text-transform: uppercase; letter-spacing: 0.5px;
+            transition: all 0.2s ease;
+        }
+        
+        .user-item:hover .user-file-badge {
+            transform: scale(1.05);
+        }
+
+        .loading-overlay {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: #0d1117; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; z-index: 100;
+            opacity: 1; transition: opacity 0.5s ease-out;
+        }
+        .loading-overlay.hidden { opacity: 0; pointer-events: none; }
+
+        .loading-spinner {
+            width: 60px; height: 60px; border: 3px solid #21262d;
+            border-top: 3px solid #238636; border-radius: 50%;
+            animation: spin 1s linear infinite; margin-bottom: 24px;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        .loading-text { font-size: 16px; color: #8b949e; margin-bottom: 16px; animation: pulse 1.5s ease-in-out infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+        .loading-dots { display: flex; gap: 8px; }
+        .loading-dot { width: 8px; height: 8px; background: #238636; border-radius: 50%; animation: bounce 1.4s ease-in-out infinite; }
+        .loading-dot:nth-child(1) { animation-delay: 0s; }
+        .loading-dot:nth-child(2) { animation-delay: 0.2s; }
+        .loading-dot:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes bounce { 0%, 80%, 100% { transform: translateY(0); opacity: 0.5; } 40% { transform: translateY(-12px); opacity: 1; } }
+
+        @media (max-width: 640px) {
+            .toast-container { right: 10px; left: 10px; width: auto; }
+            .toast { min-width: 100%; max-width: 100%; }
+            .users-panel { width: 100%; }
         }
     </style>
 </head>
 <body>
+    <div id="toastContainer" class="toast-container"></div>
+
     <div id="nameModal" class="name-modal" style="display: none;">
         <div class="name-modal-content">
-            <div class="name-modal-title">Введите ваше имя</div>
+            <div class="name-modal-title">
+                <i data-lucide="user"></i>
+                Введите ваше имя
+            </div>
             <input type="text" class="name-modal-input" id="nameInput" placeholder="Ваше имя..." maxlength="20">
-            <div class="name-modal-title" style="font-size: 16px; margin-top: 16px;">Выберите цвет курсора</div>
+            <div class="name-modal-title" style="font-size: 16px; margin-top: 24px; margin-bottom: 16px;">
+                <i data-lucide="palette"></i>
+                Выберите цвет курсора
+            </div>
             <div class="color-picker" id="colorPicker">
-                <div class="color-option" style="background: #ff0000;" data-color="#ff0000"></div>
-                <div class="color-option" style="background: #00ff00;" data-color="#00ff00"></div>
-                <div class="color-option" style="background: #0000ff;" data-color="#0000ff"></div>
-                <div class="color-option" style="background: #ffff00;" data-color="#ffff00"></div>
-                <div class="color-option" style="background: #ff00ff;" data-color="#ff00ff"></div>
-                <div class="color-option" style="background: #00ffff;" data-color="#00ffff"></div>
-                <div class="color-option" style="background: #ff8800;" data-color="#ff8800"></div>
-                <div class="color-option" style="background: #8800ff;" data-color="#8800ff"></div>
+                <div class="color-option" style="background: #ff5f56;" data-color="#ff5f56"></div>
+                <div class="color-option" style="background: #27c93f;" data-color="#27c93f"></div>
+                <div class="color-option" style="background: #58a6ff;" data-color="#58a6ff"></div>
+                <div class="color-option" style="background: #ffcc00;" data-color="#ffcc00"></div>
+                <div class="color-option" style="background: #ff2d55;" data-color="#ff2d55"></div>
+                <div class="color-option" style="background: #00d4aa;" data-color="#00d4aa"></div>
+                <div class="color-option" style="background: #ff9f0a;" data-color="#ff9f0a"></div>
+                <div class="color-option" style="background: #bf5af2;" data-color="#bf5af2"></div>
             </div>
             <div class="name-modal-buttons">
-                <button onclick="saveName()">Сохранить</button>
+                <button onclick="saveName()" style="min-width: 120px;">
+                    <i data-lucide="check" style="width: 18px; height: 18px; margin-right: 6px;"></i>
+                    Сохранить
+                </button>
             </div>
         </div>
+    </div>
+
+    <div class="users-panel" id="usersPanel">
+        <div class="users-panel-header">
+            <div class="users-panel-title">
+                <i data-lucide="users" style="width: 20px; height: 20px;"></i>
+                Активные пользователи
+            </div>
+            <div style="color: #8b949e; font-size: 13px; display: flex; align-items: center; gap: 6px;">
+                <span id="panelUserCount">1</span>
+                <i data-lucide="user" style="width: 14px; height: 14px;"></i>
+            </div>
+        </div>
+        <div class="users-panel-body" id="usersPanelBody"></div>
     </div>
 
     <div class="toolbar">
@@ -253,7 +914,7 @@
                         <span class="file-icon html-icon" id="currentIcon">H</span>
                         <span id="currentFile">index.html</span>
                     </div>
-                    <i data-lucide="chevron-down" style="width: 16px; height: 16px;"></i>
+                    <i data-lucide="chevron-down" style="width: 16px; height: 16px; transition: transform 0.3s ease;" id="dropdownArrow"></i>
                 </div>
                 <div class="dropdown-menu" id="dropdownMenu">
                     <div class="dropdown-item active" onclick="switchFile('html')">
@@ -264,6 +925,10 @@
                         <span class="file-icon css-icon">C</span>
                         <span>style.css</span>
                     </div>
+                    <div class="dropdown-item" onclick="switchFile('scss')">
+                        <span class="file-icon scss-icon">S</span>
+                        <span>style.scss</span>
+                    </div>
                     <div class="dropdown-item" onclick="switchFile('js')">
                         <span class="file-icon js-icon">J</span>
                         <span>script.js</span>
@@ -271,57 +936,120 @@
                 </div>
             </div>
         </div>
-        
+
         <div class="toolbar-right">
             <button class="btn-primary" id="runBtn" onclick="toggleRun()">
-                <i data-lucide="play" id="runIcon"></i>
+                <i data-lucide="play" id="runIcon" style="transition: all 0.2s ease;"></i>
             </button>
-            
+
             <button class="btn-yellow" id="consoleBtn" onclick="toggleConsole()">
-                <i data-lucide="terminal" id="consoleIcon"></i>
+                <i data-lucide="terminal" id="consoleIcon" style="transition: all 0.2s ease;"></i>
             </button>
-            
-            <div class="status">
+
+            <div class="status" onclick="toggleUsersPanel()" title="Показать/скрыть пользователей">
                 <span class="status-dot offline" id="statusDot"></span>
                 <span id="userCount">1</span>
             </div>
         </div>
     </div>
-    
+
     <div class="editor-container">
-        <div class="editor-pane active" id="pane-html"><div id="editor-html" style="width:100%;height:100%"></div></div>
-        <div class="editor-pane" id="pane-css"><div id="editor-css" style="width:100%;height:100%"></div></div>
-        <div class="editor-pane" id="pane-js"><div id="editor-js" style="width:100%;height:100%"></div></div>
+        <div class="loading-overlay" id="loadingOverlay">
+            <div class="loading-spinner"></div>
+            <div class="loading-text">Подключение к серверу...</div>
+            <div class="loading-dots">
+                <div class="loading-dot"></div>
+                <div class="loading-dot"></div>
+                <div class="loading-dot"></div>
+            </div>
+        </div>
+
+        <div class="editor-pane active" id="pane-html">
+            <div id="editor-html" style="width:100%;height:100%"></div>
+        </div>
+        <div class="editor-pane" id="pane-css">
+            <div id="editor-css" style="width:100%;height:100%"></div>
+        </div>
+        <div class="editor-pane" id="pane-scss">
+            <div id="editor-scss" style="width:100%;height:100%"></div>
+        </div>
+        <div class="editor-pane" id="pane-js">
+            <div id="editor-js" style="width:100%;height:100%"></div>
+        </div>
     </div>
-    
+
     <div class="preview-overlay" id="previewOverlay">
         <iframe id="previewFrame" sandbox="allow-scripts allow-same-origin"></iframe>
     </div>
-    
+
     <div class="console-wrapper" id="consoleWrapper">
-        <div class="console-resize" ontouchstart="startResizeTouch(event)" onmousedown="startResizeMouse(event)"></div>
+        <div class="console-resize" id="consoleResize"></div>
         <div class="console-header">
             <div style="display: flex; align-items: center; gap: 10px;">
                 <i data-lucide="terminal" style="width: 18px; height: 18px;"></i>
                 <span style="font-weight: 600;">Console</span>
-                <span style="color: #6e7681; font-size: 12px;" id="logCount">0</span>
+                <span style="color: #6e7681; font-size: 12px; background: #0d1117; padding: 2px 8px; border-radius: 4px;" id="logCount">0</span>
             </div>
-            <button onclick="clearConsole()" style="padding: 8px; height: 36px; width: 36px;">
-                <i data-lucide="trash-2" style="width: 18px; height: 18px;"></i>
-            </button>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <div class="console-filter-dropdown">
+                    <div class="console-filter-trigger" onclick="toggleConsoleFilterMenu(event)">
+                        <i data-lucide="filter" style="width: 14px; height: 14px;"></i>
+                        <span>Фильтры</span>
+                        <i data-lucide="chevron-down" style="width: 14px; height: 14px; transition: transform 0.3s ease;" id="filterArrow"></i>
+                    </div>
+                    <div class="console-filter-menu" id="consoleFilterMenu">
+                        <div class="console-filter-item all-item active" onclick="toggleFilter('all')" data-filter="all">
+                            <div class="console-filter-checkbox">
+                                <i data-lucide="check" style="width: 10px; height: 10px; color: white;"></i>
+                            </div>
+                            <span>Все (All)</span>
+                        </div>
+                        <div class="console-filter-item active" onclick="toggleFilter('log')" data-filter="log">
+                            <div class="console-filter-checkbox">
+                                <i data-lucide="check" style="width: 10px; height: 10px; color: white;"></i>
+                            </div>
+                            <span>Log</span>
+                        </div>
+                        <div class="console-filter-item active" onclick="toggleFilter('error')" data-filter="error">
+                            <div class="console-filter-checkbox">
+                                <i data-lucide="check" style="width: 10px; height: 10px; color: white;"></i>
+                            </div>
+                            <span>Error</span>
+                        </div>
+                        <div class="console-filter-item active" onclick="toggleFilter('warn')" data-filter="warn">
+                            <div class="console-filter-checkbox">
+                                <i data-lucide="check" style="width: 10px; height: 10px; color: white;"></i>
+                            </div>
+                            <span>Warn</span>
+                        </div>
+                        <div class="console-filter-item active" onclick="toggleFilter('info')" data-filter="info">
+                            <div class="console-filter-checkbox">
+                                <i data-lucide="check" style="width: 10px; height: 10px; color: white;"></i>
+                            </div>
+                            <span>Info</span>
+                        </div>
+                    </div>
+                </div>
+                <button onclick="clearConsole()" title="Очистить консоль" style="padding: 8px; height: 36px; width: 36px; border-radius: 6px;">
+                    <i data-lucide="trash-2" style="width: 16px; height: 16px;"></i>
+                </button>
+            </div>
         </div>
         <div class="console-body" id="consoleBody">
-            <div class="empty-state">Нажмите Run...</div>
+            <div class="empty-state">
+                <i data-lucide="terminal" style="width: 48px; height: 48px; margin-bottom: 12px; opacity: 0.3;"></i>
+                <div>Нажмите Run для запуска...</div>
+            </div>
         </div>
         <div class="console-input-line">
             <span class="console-prompt">❯</span>
-            <input type="text" class="console-input" id="consoleInput" placeholder="Код..." onkeydown="handleConsole(event)">
+            <input type="text" class="console-input" id="consoleInput" placeholder="Введите код JavaScript..." onkeydown="handleConsole(event)">
         </div>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getDatabase, ref, get, set, onValue, onDisconnect, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+        import { getDatabase, ref, get, set, onValue, onDisconnect, serverTimestamp, update } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyC7kKg6LbtJ51sw9US2AyRmkI_NwDmE28Q",
@@ -335,7 +1063,7 @@
 
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
-        
+
         const defaultFiles = {
             html: `<!DOCTYPE html>
 <html>
@@ -359,6 +1087,28 @@
 }
 h1 { color: #333; font-size: 24px; }
 button { padding: 15px 30px; font-size: 18px; margin: 10px; touch-action: manipulation; }`,
+            scss: `$primary-color: #333;
+$bg-color: #f0f0f0;
+
+body { 
+    font-family: -apple-system; 
+    background: $bg-color; 
+    text-align: center; 
+    padding: 20px; 
+    touch-action: manipulation;
+    
+    h1 { 
+        color: $primary-color; 
+        font-size: 24px; 
+    }
+    
+    button { 
+        padding: 15px 30px; 
+        font-size: 18px; 
+        margin: 10px; 
+        touch-action: manipulation; 
+    }
+}`,
             js: `const btn = document.getElementById('btn');
 let count = 0;
 btn.addEventListener('click', () => {
@@ -376,6 +1126,7 @@ btn.addEventListener('click', () => {
         window.set = set;
         window.onValue = onValue;
         window.onDisconnect = onDisconnect;
+        window.update = update;
     </script>
 
     <script>
@@ -383,13 +1134,104 @@ btn.addEventListener('click', () => {
         let isRunning = false, isConsoleOpen = false, currentFile = 'html';
         let fontSize = 16, userName = '', userColor = '';
         let fileUpdateTimeout = null, cursorSendTimeout = null;
+        let isUpdatingFromFirebase = false;
+        let remoteCursors = new Map();
+        let consoleFilters = { all: true, log: true, error: true, warn: true, info: true };
+        let versionHistory = {};
+        let reconnectAttempts = 0;
+        let maxReconnectAttempts = 5;
+        let isConnected = false;
+        let knownUsers = new Set();
+        let resizeRAF = null; // ИСПРАВЛЕНИЕ #3: requestAnimationFrame для ресайза
 
         window.onload = () => {
             checkUserName();
             initEditors();
             lucide.createIcons();
             setupPinchZoom();
+            setupAutoSave();
+            checkConnection();
+            initConsoleFilters();
         };
+
+        function initConsoleFilters() {
+            updateFilterUI();
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.console-filter-dropdown')) {
+                    document.getElementById('consoleFilterMenu').classList.remove('open');
+                    document.getElementById('filterArrow').classList.remove('rotate-180');
+                }
+            });
+        }
+
+        function toggleConsoleFilterMenu(e) {
+            e.stopPropagation();
+            const menu = document.getElementById('consoleFilterMenu');
+            const arrow = document.getElementById('filterArrow');
+            const isOpen = menu.classList.contains('open');
+            
+            if (isOpen) {
+                menu.classList.remove('open');
+                arrow.classList.remove('rotate-180');
+            } else {
+                menu.classList.add('open');
+                arrow.classList.add('rotate-180');
+            }
+        }
+
+        function toggleFilter(type) {
+            if (type === 'all') {
+                const newState = !consoleFilters.all;
+                Object.keys(consoleFilters).forEach(key => {
+                    consoleFilters[key] = newState;
+                });
+            } else {
+                consoleFilters[type] = !consoleFilters[type];
+                const specificFilters = ['log', 'error', 'warn', 'info'];
+                const allSpecificChecked = specificFilters.every(k => consoleFilters[k]);
+                consoleFilters.all = allSpecificChecked;
+            }
+            
+            updateFilterUI();
+            applyConsoleFilters();
+            setTimeout(() => lucide.createIcons(), 10);
+        }
+
+        function updateFilterUI() {
+            document.querySelectorAll('.console-filter-item').forEach(item => {
+                const filter = item.dataset.filter;
+                const isActive = consoleFilters[filter];
+                
+                if (isActive) {
+                    item.classList.add('active');
+                } else {
+                    item.classList.remove('active');
+                }
+            });
+        }
+
+        function applyConsoleFilters() {
+            const lines = document.querySelectorAll('.console-line');
+            lines.forEach(line => {
+                const typeSpan = line.querySelector('[class^="console-"]');
+                if (typeSpan) {
+                    let lineType = typeSpan.className.replace('console-', '').split(' ')[0];
+                    if (!['log','error','warn','info'].includes(lineType)) lineType = 'log';
+                    
+                    if (consoleFilters[lineType]) {
+                        line.classList.remove('hidden');
+                    } else {
+                        line.classList.add('hidden');
+                    }
+                }
+            });
+            updateLogCount();
+        }
+
+        function updateLogCount() {
+            const visibleCount = document.querySelectorAll('.console-line:not(.hidden)').length;
+            document.getElementById('logCount').textContent = visibleCount;
+        }
 
         function checkUserName() {
             const savedName = localStorage.getItem('syncCodeUserName');
@@ -402,19 +1244,16 @@ btn.addEventListener('click', () => {
                 document.getElementById('nameModal').style.display = 'flex';
                 document.getElementById('nameInput').focus();
                 initColorPicker();
+                lucide.createIcons();
             }
         }
 
         function initColorPicker() {
-            const colors = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff', '#ff8800', '#8800ff'];
-            const savedColor = localStorage.getItem('syncCodeUserColor') || colors[0];
             document.querySelectorAll('.color-option').forEach(el => {
                 el.onclick = () => selectColor(el.dataset.color);
-                if (el.dataset.color === savedColor) {
-                    el.classList.add('selected');
-                }
             });
-            userColor = savedColor;
+            const firstColor = document.querySelector('.color-option');
+            if (firstColor) selectColor(firstColor.dataset.color);
         }
 
         function selectColor(color) {
@@ -435,141 +1274,493 @@ btn.addEventListener('click', () => {
         }
 
         function initEditors() {
-            ['html', 'css', 'js'].forEach(type => {
+            ['html', 'css', 'scss', 'js'].forEach(type => {
                 editors[type] = ace.edit('editor-' + type);
                 editors[type].setTheme('ace/theme/monokai');
-                editors[type].session.setMode('ace/mode/' + (type === 'js' ? 'javascript' : type));
-                editors[type].setOptions({
-                    fontSize: fontSize, showPrintMargin: false,
-                    enableBasicAutocompletion: true, enableLiveAutocompletion: true,
-                    tabSize: 2, useSoftTabs: true, showFoldWidgets: false,
-                    wrap: true, useWrapMode: true
-                });
-                editors[type].setValue(window.defaultFiles[type], -1);
                 
-                editors[type].on('change', () => {
+                if (type === 'scss') {
+                    editors[type].session.setMode('ace/mode/scss');
+                } else {
+                    editors[type].session.setMode('ace/mode/' + (type === 'js' ? 'javascript' : type));
+                }
+                
+                editors[type].setOptions({
+                    fontSize: fontSize, 
+                    showPrintMargin: false,
+                    enableBasicAutocompletion: true, 
+                    enableLiveAutocompletion: true,
+                    enableSnippets: true,
+                    tabSize: 2, 
+                    useSoftTabs: true, 
+                    showFoldWidgets: false,
+                    wrap: true, 
+                    useWrapMode: true,
+                    enableEmmet: true,
+                    showGutter: true,
+                    fixedWidthGutter: true,
+                    scrollPastEnd: 0.5,
+                    animatedScroll: true,
+                    showLineNumbers: true,
+                    firstLineNumber: 1
+                });
+                
+                editors[type].setValue('', -1);
+                editors[type].container.style.zIndex = '1';
+
+                editors[type].commands.addCommand({
+                    name: 'emmetExpandAbbreviation',
+                    bindKey: {win: 'Tab', mac: 'Tab'},
+                    exec: function(editor) {
+                        const pos = editor.getCursorPosition();
+                        const line = editor.session.getLine(pos.row);
+                        const beforeCursor = line.substring(0, pos.column);
+                        
+                        if (window.emmet && beforeCursor.trim()) {
+                            try {
+                                const expanded = window.emmet.expand(beforeCursor.trim());
+                                if (expanded) {
+                                    editor.session.replace(
+                                        new ace.Range(pos.row, 0, pos.row, pos.column),
+                                        expanded
+                                    );
+                                    return;
+                                }
+                            } catch (e) {}
+                        }
+                        editor.indent();
+                    }
+                });
+
+                editors[type].on('change', (delta) => {
+                    if (isUpdatingFromFirebase) return;
+                    validateCode(type);
                     clearTimeout(fileUpdateTimeout);
                     fileUpdateTimeout = setTimeout(() => {
                         const content = editors[currentFile].getValue();
-                        if (content) {
-                            sendFileChange(currentFile, content);
-                        }
+                        sendFileChange(currentFile, content);
+                        saveVersion(currentFile, content);
                         if (isRunning) updatePreview();
-                    }, 300);
+                    }, 500);
                 });
-            });
-            
-            const sendCursorUpdate = () => {
-                if (userId && editors[currentFile]) {
-                    const pos = editors[currentFile].selection.getCursor();
-                    if (pos && typeof pos.row === 'number' && typeof pos.column === 'number') {
-                        sendCursor(currentFile, pos.row, pos.column);
-                    }
-                }
-            };
-            
-            ['html', 'css', 'js'].forEach(type => {
+
                 editors[type].on('changeSelection', () => {
                     if (type === currentFile) {
                         clearTimeout(cursorSendTimeout);
-                        cursorSendTimeout = setTimeout(sendCursorUpdate, 50);
+                        cursorSendTimeout = setTimeout(sendCursorUpdate, 100);
+                    }
+                });
+
+                editors[type].session.on('changeScrollTop', () => {
+                    if (type === currentFile) updateRemoteCursors();
+                });
+
+                editors[type].session.on('changeScrollLeft', () => {
+                    if (type === currentFile) updateRemoteCursors();
+                });
+
+                // ИСПРАВЛЕНИЕ #5: Обновление gutter при изменениях
+                editors[type].session.on('change', () => {
+                    updateGutterAnnotations(type);
+                    updateUserIndicatorsInGutter(type);
+                });
+
+                editors[type].renderer.on('afterRender', () => {
+                    if (type === currentFile) {
+                        updateUserIndicatorsInGutter(type);
                     }
                 });
             });
-            
+
             window.addEventListener('resize', () => {
+                Object.values(editors).forEach(ed => ed.resize());
                 setTimeout(updateRemoteCursors, 100);
             });
         }
 
+        // ИСПРАВЛЕНИЕ #5: Показать индикаторы участников в gutter
+        function updateUserIndicatorsInGutter(type) {
+            const editor = editors[type];
+            if (!editor) return;
+
+            const cells = editor.container.querySelectorAll('.ace_gutter-cell');
+            
+            // Удаляем старые индикаторы
+            cells.forEach(cell => {
+                const oldIndicator = cell.querySelector('.gutter-user-indicator');
+                if (oldIndicator) oldIndicator.remove();
+            });
+
+            // Добавляем новые индикаторы для активных пользователей
+            remoteUsers.forEach((data, id) => {
+                if (data.cursor && data.cursor.file === type) {
+                    const row = data.cursor.row;
+                    if (cells[row]) {
+                        // Проверяем, есть ли уже ошибка на этой строке
+                        const hasError = cells[row].querySelector('.gutter-error');
+                        if (!hasError) {
+                            const indicator = document.createElement('div');
+                            indicator.className = 'gutter-user-indicator';
+                            indicator.style.background = data.color;
+                            indicator.textContent = (data.name || 'U').charAt(0).toUpperCase();
+                            indicator.title = `${data.name} на строке ${row + 1}`;
+                            cells[row].insertBefore(indicator, cells[row].firstChild);
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateGutterAnnotations(type) {
+            const editor = editors[type];
+            const session = editor.session;
+            const annotations = session.getAnnotations();
+            const cells = editor.container.querySelectorAll('.ace_gutter-cell');
+            
+            cells.forEach((cell, index) => {
+                let errorEl = cell.querySelector('.gutter-error');
+                if (errorEl) errorEl.remove();
+                
+                const lineAnnotations = annotations.filter(a => a.row === index);
+                
+                if (lineAnnotations.length > 0) {
+                    const severity = lineAnnotations[0].type;
+                    errorEl = document.createElement('div');
+                    errorEl.className = `gutter-error gutter-error-${severity}`;
+                    errorEl.textContent = severity === 'error' ? '!' : severity === 'warning' ? '!' : 'i';
+                    errorEl.title = lineAnnotations[0].text;
+                    cell.insertBefore(errorEl, cell.firstChild);
+                }
+            });
+        }
+
+        function sendCursorUpdate() {
+            if (userId && editors[currentFile]) {
+                const pos = editors[currentFile].selection.getCursor();
+                if (pos && typeof pos.row === 'number' && typeof pos.column === 'number') {
+                    sendCursor(currentFile, pos.row, pos.column);
+                }
+            }
+        }
+
+        function validateCode(type) {
+            const editor = editors[type];
+            const code = editor.getValue();
+            const annotations = [];
+
+            if (type === 'js') {
+                try {
+                    new Function(code);
+                } catch (e) {
+                    const match = e.message.match(/line (\d+)/i);
+                    if (match) {
+                        annotations.push({
+                            row: parseInt(match[1]) - 1,
+                            column: 0,
+                            text: e.message,
+                            type: 'error'
+                        });
+                    }
+                }
+            }
+
+            if (type === 'css' || type === 'scss') {
+                const lines = code.split('\n');
+                lines.forEach((line, i) => {
+                    if (line.includes('{') && !line.includes('}')) {
+                        let openCount = 1;
+                        for (let j = i + 1; j < lines.length; j++) {
+                            if (lines[j].includes('{')) openCount++;
+                            if (lines[j].includes('}')) openCount--;
+                            if (openCount === 0) break;
+                        }
+                        if (openCount !== 0) {
+                            annotations.push({
+                                row: i,
+                                column: 0,
+                                text: 'Unclosed bracket',
+                                type: 'warning'
+                            });
+                        }
+                    }
+                });
+            }
+
+            editor.session.setAnnotations(annotations);
+            updateGutterAnnotations(type);
+        }
+
+        function hideLoading() {
+            const overlay = document.getElementById('loadingOverlay');
+            overlay.classList.add('hidden');
+            setTimeout(() => {
+                overlay.style.display = 'none';
+            }, 500);
+        }
+
         function setupFirebase() {
             updateStatus('connecting');
-            
+
             userId = localStorage.getItem('firebaseUserId') || 'user_' + Math.random().toString(36).substr(2, 9);
             localStorage.setItem('firebaseUserId', userId);
-            
+
             const userRef = window.ref(window.db, 'users/' + userId);
             const filesRef = window.ref(window.db, 'files');
             const usersRef = window.ref(window.db, 'users');
-            
+
             window.onDisconnect(userRef).remove();
             window.set(userRef, { 
                 name: userName, 
                 color: userColor, 
                 cursor: { file: 'html', row: 0, column: 0 }, 
                 lastActive: window.serverTimestamp() 
-            });
-            
+            }).then(() => {
+                isConnected = true;
+                reconnectAttempts = 0;
+            }).catch(handleConnectionError);
+
             window.get(filesRef).then(snapshot => {
                 if (snapshot.exists()) {
                     const files = snapshot.val();
-                    ['html','css','js'].forEach(f => {
-                        if (files[f] && editors[f] && editors[f].getValue() !== files[f]) {
-                            const pos = editors[f].selection.getCursor();
-                            editors[f].setValue(files[f], -1);
-                            editors[f].selection.moveTo(pos.row, pos.column);
+                    ['html','css','scss','js'].forEach(f => {
+                        if (files[f] && editors[f]) {
+                            animateCodeLoad(f, files[f]);
+                            saveVersion(f, files[f]);
+                        }
+                    });
+                } else {
+                    ['html','css','scss','js'].forEach(f => {
+                        if (editors[f]) {
+                            animateCodeLoad(f, window.defaultFiles[f]);
+                            saveVersion(f, window.defaultFiles[f]);
                         }
                     });
                 }
-                updateStatus('online');
-            }).catch(() => updateStatus('offline'));
-            
+                
+                setTimeout(() => {
+                    updateStatus('online');
+                    hideLoading();
+                    showToast('success', 'Подключено', 'Успешное подключение к серверу');
+                }, 1000);
+                
+            }).catch((error) => {
+                updateStatus('offline');
+                hideLoading();
+                showToast('error', 'Ошибка', 'Не удалось загрузить файлы');
+                handleConnectionError(error);
+            });
+
             window.onValue(filesRef, snapshot => {
                 if (!snapshot.exists()) return;
                 const files = snapshot.val();
-                ['html','css','js'].forEach(f => {
-                    if (files[f] && editors[f] && editors[f].getValue() !== files[f]) {
-                        const pos = editors[f].selection.getCursor();
-                        editors[f].setValue(files[f], -1);
-                        editors[f].selection.moveTo(pos.row, pos.column);
+                
+                ['html','css','scss','js'].forEach(f => {
+                    if (files[f] && editors[f]) {
+                        const currentValue = editors[f].getValue();
+                        if (currentValue !== files[f]) {
+                            isUpdatingFromFirebase = true;
+                            
+                            const pos = editors[f].selection.getCursor();
+                            const scrollTop = editors[f].session.getScrollTop();
+                            const scrollLeft = editors[f].session.getScrollLeft();
+                            
+                            applyDiff(editors[f], currentValue, files[f]);
+                            
+                            editors[f].selection.moveTo(pos.row, pos.column);
+                            editors[f].session.setScrollTop(scrollTop);
+                            editors[f].session.setScrollLeft(scrollLeft);
+                            
+                            setTimeout(() => {
+                                isUpdatingFromFirebase = false;
+                            }, 100);
+                        }
                     }
                 });
             });
-            
+
             window.onValue(usersRef, snapshot => {
                 if (!snapshot.exists()) {
-                    updateCount(0);
+                    updateCount(1);
+                    updateUsersPanel([]);
                     return;
                 }
                 const users = snapshot.val();
                 const now = Date.now();
                 let activeCount = 0;
-                
-                removeAllRemoteCursors();
-                
+                const activeUsers = [];
+                const activeUserIds = new Set();
+
                 Object.entries(users).forEach(([id, data]) => {
                     if (id !== userId) {
                         const userTime = data.lastActive ? new Date(data.lastActive).getTime() : 0;
                         const userAge = now - userTime;
-                        
+
                         if (userAge < 60000 && data.cursor) {
                             activeCount++;
+                            activeUserIds.add(id);
+                            activeUsers.push({ id, ...data });
+                            
+                            if (!knownUsers.has(id)) {
+                                knownUsers.add(id);
+                                showUserJoinToast(data);
+                            }
+                            
                             if (data.cursor.file === currentFile) {
-                                setTimeout(() => {
-                                    showRemoteCursor(id, data.name || 'User', data.cursor.file, data.cursor.row, data.cursor.column, data.color);
-                                }, 100);
+                                showRemoteCursor(id, data.name || 'User', data.cursor.file, data.cursor.row, data.cursor.column, data.color);
                                 remoteUsers.set(id, data);
                             }
                         } else if (userAge >= 60000) {
                             window.set(window.ref(window.db, 'users/' + id), null);
+                            knownUsers.delete(id);
                         }
+                    } else {
+                        activeCount++;
                     }
                 });
-                
+
+                remoteCursors.forEach((_, id) => {
+                    if (!activeUserIds.has(id)) {
+                        removeRemoteCursor(id);
+                        knownUsers.delete(id);
+                    }
+                });
+
                 updateCount(activeCount);
+                updateUsersPanel(activeUsers);
+                updateUserIndicatorsInGutter(currentFile);
             });
         }
 
+        function showUserJoinToast(data) {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = 'toast info';
+            toast.innerHTML = `
+                <div class="toast-icon">
+                    <i data-lucide="user-plus" style="width: 20px; height: 20px;"></i>
+                </div>
+                <div class="toast-content">
+                    <div class="toast-title">Новый участник</div>
+                    <div class="toast-message" style="display: flex; align-items: center; gap: 8px;">
+                        <div style="width: 20px; height: 20px; border-radius: 50%; background: ${data.color}; display: flex; align-items: center; justify-content: center; font-weight: bold; color: black; font-size: 10px;">${data.name ? data.name[0].toUpperCase() : '?'}</div>
+                        <span>${data.name || 'User'} подключился</span>
+                    </div>
+                </div>
+                <div class="toast-close" onclick="removeToast(this.parentElement)">
+                    <i data-lucide="x" style="width: 16px; height: 16px;"></i>
+                </div>
+            `;
+            container.appendChild(toast);
+            lucide.createIcons();
+            setTimeout(() => removeToast(toast), 5000);
+        }
+
+        function handleConnectionError(error) {
+            if (reconnectAttempts < maxReconnectAttempts) {
+                reconnectAttempts++;
+                showToast('warning', 'Переподключение', `Попытка ${reconnectAttempts} из ${maxReconnectAttempts}...`);
+                setTimeout(() => {
+                    setupFirebase();
+                }, 2000 * reconnectAttempts);
+            } else {
+                showToast('error', 'Ошибка подключения', 'Не удалось подключиться к серверу');
+                updateStatus('offline');
+            }
+        }
+
+        function checkConnection() {
+            setInterval(() => {
+                if (userId) {
+                    window.update(window.ref(window.db, 'users/' + userId), {
+                        lastActive: window.serverTimestamp()
+                    }).catch(() => {
+                        if (isConnected) {
+                            isConnected = false;
+                            showToast('error', 'Соединение потеряно', 'Попытка переподключения...');
+                            handleConnectionError();
+                        }
+                    });
+                }
+            }, 10000);
+        }
+
+        function applyDiff(editor, oldText, newText) {
+            const oldLines = oldText.split('\n');
+            const newLines = newText.split('\n');
+            const session = editor.session;
+            const doc = session.getDocument();
+            const maxLen = Math.max(oldLines.length, newLines.length);
+            
+            for (let i = 0; i < maxLen; i++) {
+                const oldLine = oldLines[i] || '';
+                const newLine = newLines[i] || '';
+                
+                if (oldLine !== newLine) {
+                    if (i < oldLines.length && i < newLines.length) {
+                        const range = new ace.Range(i, 0, i, oldLine.length);
+                        doc.replace(range, newLine);
+                        highlightLine(editor, i);
+                    } else if (i >= oldLines.length) {
+                        const pos = { row: i, column: 0 };
+                        doc.insert(pos, (i > 0 ? '\n' : '') + newLine);
+                        highlightLine(editor, i);
+                    } else if (i >= newLines.length) {
+                        const range = new ace.Range(i, 0, i + 1, 0);
+                        doc.remove(range);
+                    }
+                }
+            }
+            
+            if (oldLines.length > newLines.length) {
+                const range = new ace.Range(newLines.length, 0, oldLines.length, 0);
+                doc.remove(range);
+            }
+        }
+
+        function highlightLine(editor, row) {
+            const lineHeight = editor.renderer.lineHeight;
+            const top = row * lineHeight;
+            
+            const highlight = document.createElement('div');
+            highlight.className = 'line-highlight-anim';
+            highlight.style.top = top + 'px';
+            highlight.style.height = lineHeight + 'px';
+            
+            editor.container.appendChild(highlight);
+            
+            setTimeout(() => {
+                if (highlight.parentNode) highlight.remove();
+            }, 1500);
+            
+            const gutterCells = editor.container.querySelectorAll('.ace_gutter-cell');
+            if (gutterCells[row]) {
+                gutterCells[row].style.background = 'rgba(88, 166, 255, 0.3)';
+                gutterCells[row].style.color = '#58a6ff';
+                setTimeout(() => {
+                    if (gutterCells[row]) {
+                        gutterCells[row].style.background = '';
+                        gutterCells[row].style.color = '';
+                    }
+                }, 1500);
+            }
+        }
+
+        function animateCodeLoad(file, content) {
+            if (!editors[file]) return;
+            isUpdatingFromFirebase = true;
+            editors[file].setValue(content, -1);
+            isUpdatingFromFirebase = false;
+        }
+
         function sendFileChange(file, content) {
-            if (!userId) return;
-            window.set(window.ref(window.db, 'files/' + file), content);
+            if (!userId || isUpdatingFromFirebase) return;
+            window.set(window.ref(window.db, 'files/' + file), content).catch((error) => {
+                showToast('error', 'Ошибка сохранения', 'Не удалось сохранить изменения');
+            });
         }
 
         function sendCursor(file, row, column) {
             if (!userId) return;
-            window.set(window.ref(window.db, 'users/' + userId), { 
-                name: userName, 
-                color: userColor, 
+            window.update(window.ref(window.db, 'users/' + userId), { 
                 cursor: { file, row, column },
                 lastActive: window.serverTimestamp()
             });
@@ -583,109 +1774,265 @@ btn.addEventListener('click', () => {
         function updateStatus(status) { 
             document.getElementById('statusDot').className = 'status-dot ' + status; 
         }
-        
+
         function updateCount(count) { 
-            document.getElementById('userCount').textContent = count + 1; 
+            document.getElementById('userCount').textContent = count; 
+            document.getElementById('panelUserCount').textContent = count;
         }
-        
-        function showRemoteCursor(uid, name, file, row, col, color) {
-            if (file !== currentFile) return;
+
+        function updateUsersPanel(users) {
+            const panel = document.getElementById('usersPanelBody');
             
-            const old = document.getElementById('cursor-' + uid); 
-            if (old) old.remove();
+            const currentUserHtml = `
+                <div class="user-item" style="cursor: default; animation: none;">
+                    <div class="user-avatar" style="background: ${userColor};">
+                        ${userName.charAt(0).toUpperCase()}
+                    </div>
+                    <div class="user-info">
+                        <div class="user-name">${userName} <i data-lucide="user-check" style="width: 12px; height: 12px; color: #3fb950;"></i></div>
+                        <div class="user-status">
+                            <span class="user-file-badge" style="background: ${getFileColor(currentFile)}; color: ${currentFile === 'js' ? 'black' : 'white'};">
+                                ${currentFile.toUpperCase()}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            const otherUsersHtml = users.map(user => `
+                <div class="user-item" onclick="jumpToUser('${user.id}')">
+                    <div class="user-avatar" style="background: ${user.color};">
+                        ${user.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div class="user-info">
+                        <div class="user-name">${user.name}</div>
+                        <div class="user-status">
+                            <span class="user-file-badge" style="background: ${getFileColor(user.cursor.file)}; color: ${user.cursor.file === 'js' ? 'black' : 'white'};">
+                                ${user.cursor.file.toUpperCase()}
+                            </span>
+                            <span>Строка ${user.cursor.row + 1}</span>
+                        </div>
+                    </div>
+                    <i data-lucide="mouse-pointer-2" style="position: absolute; right: 12px; opacity: 0.3; width: 16px; height: 16px;"></i>
+                </div>
+            `).join('');
+            
+            panel.innerHTML = currentUserHtml + otherUsersHtml;
+            lucide.createIcons();
+        }
+
+        function jumpToUser(userId) {
+            const user = remoteUsers.get(userId);
+            if (!user || !user.cursor) return;
+            
+            const file = user.cursor.file;
+            const row = user.cursor.row;
+            
+            if (currentFile !== file) {
+                switchFile(file);
+            }
             
             const editor = editors[file];
-            if (!editor || !editor.renderer) return;
+            if (editor) {
+                editor.gotoLine(row + 1, user.cursor.column, true);
+                editor.selection.moveTo(row, user.cursor.column);
+                
+                blinkLine(editor, row, user.color);
+                
+                if (window.innerWidth < 768) {
+                    setTimeout(() => {
+                        toggleUsersPanel();
+                    }, 300);
+                }
+                
+                showToast('info', 'Навигация', `Переход к ${user.name}, строка ${row + 1}`);
+            }
+        }
+
+        function blinkLine(editor, row, color) {
+            const lineElements = editor.container.querySelectorAll('.ace_gutter-cell');
+            if (lineElements[row]) {
+                lineElements[row].style.setProperty('--blink-color', color);
+                lineElements[row].classList.add('blink-line');
+                
+                setTimeout(() => {
+                    lineElements[row].classList.remove('blink-line');
+                }, 900);
+            }
+        }
+
+        function getFileColor(file) {
+            const colors = {
+                html: '#e34c26',
+                css: '#264de4',
+                scss: '#cc6699',
+                js: '#f7df1e'
+            };
+            return colors[file] || '#666';
+        }
+
+        function toggleUsersPanel() {
+            const panel = document.getElementById('usersPanel');
+            const isOpen = panel.classList.contains('open');
             
+            if (isOpen) {
+                panel.classList.remove('open');
+                setTimeout(() => {
+                    Object.values(editors).forEach(ed => ed.resize());
+                }, 350);
+            } else {
+                panel.classList.add('open');
+                setTimeout(() => {
+                    Object.values(editors).forEach(ed => ed.resize());
+                }, 350);
+            }
+        }
+
+        // ИСПРАВЛЕНИЕ #1: Правильное позиционирование курсоров с учетом скролла
+        function showRemoteCursor(uid, name, file, row, col, color) {
+            if (file !== currentFile) return;
+
+            const editor = editors[file];
+            if (!editor || !editor.renderer) return;
+
             const container = editor.container;
             if (!container) return;
-            
+
             try {
                 const coords = editor.renderer.textToScreenCoordinates(row, col);
-                if (!coords || coords.pageX === undefined || coords.pageY === undefined) return;
+                if (!coords) return;
+
+                const scrollTop = editor.session.getScrollTop();
+                const scrollLeft = editor.session.getScrollLeft();
+                const lineHeight = editor.renderer.lineHeight;
                 
+                // Учитываем скролл и позицию контейнера
                 const containerRect = container.getBoundingClientRect();
-                const left = coords.pageX - containerRect.left;
-                const top = coords.pageY - containerRect.top;
+                const editorContentEl = container.querySelector('.ace_scroller');
                 
-                const el = document.createElement('div');
-                el.id = 'cursor-' + uid; 
-                el.className = 'remote-cursor';
+                if (!editorContentEl) return;
+                
+                const contentRect = editorContentEl.getBoundingClientRect();
+                
+                const left = coords.pageX - contentRect.left + editorContentEl.scrollLeft;
+                const top = coords.pageY - contentRect.top + editorContentEl.scrollTop;
+
+                let el = document.getElementById('cursor-' + uid);
+                
+                if (!el) {
+                    el = document.createElement('div');
+                    el.id = 'cursor-' + uid; 
+                    el.className = 'remote-cursor';
+                    editorContentEl.appendChild(el);
+                    remoteCursors.set(uid, el);
+                }
+
                 el.style.left = Math.max(0, left) + 'px'; 
                 el.style.top = Math.max(0, top) + 'px';
+                el.style.height = lineHeight + 'px';
                 el.innerHTML = `<div class="remote-caret" style="background:${color};"></div><div class="cursor-label" style="background:${color};">${name}</div>`;
-                container.appendChild(el);
+                
             } catch (e) {
                 console.error('Cursor error:', e);
             }
         }
-        
+
         function removeRemoteCursor(uid) { 
             const el = document.getElementById('cursor-' + uid); 
-            if (el) el.remove(); 
-        }
-
-        function removeAllRemoteCursors() {
-            remoteUsers.forEach((_, id) => removeRemoteCursor(id));
-            remoteUsers.clear();
+            if (el) {
+                el.remove();
+                remoteCursors.delete(uid);
+            }
         }
 
         function switchFile(type) {
-            currentFile = type;
-            document.querySelectorAll('.editor-pane').forEach(p => p.classList.remove('active'));
-            document.getElementById('pane-' + type).classList.add('active');
-            document.querySelectorAll('.dropdown-item').forEach((el, i) => el.classList.toggle('active', ['html','css','js'][i] === type));
+            if (currentFile === type) return;
             
-            const names = {html: 'index.html', css: 'style.css', js: 'script.js'};
-            const icons = {html: 'H', css: 'C', js: 'J'};
-            const colors = {html: 'html-icon', css: 'css-icon', js: 'js-icon'};
+            currentFile = type;
+            
+            document.querySelectorAll('.editor-pane').forEach(p => {
+                p.classList.remove('active');
+            });
+            
+            const activePane = document.getElementById('pane-' + type);
+            activePane.classList.add('active');
+            
+            document.querySelectorAll('.dropdown-item').forEach((el, i) => {
+                el.classList.toggle('active', ['html','css','scss','js'][i] === type);
+            });
+
+            const names = {html: 'index.html', css: 'style.css', scss: 'style.scss', js: 'script.js'};
+            const icons = {html: 'H', css: 'C', scss: 'S', js: 'J'};
+            const colors = {html: 'html-icon', css: 'css-icon', scss: 'scss-icon', js: 'js-icon'};
+            
             document.getElementById('currentFile').textContent = names[type];
             const iconEl = document.getElementById('currentIcon');
             iconEl.textContent = icons[type]; 
             iconEl.className = 'file-icon ' + colors[type];
-            document.getElementById('dropdownMenu').classList.remove('open');
             
+            const arrow = document.getElementById('dropdownArrow');
+            arrow.classList.remove('rotate-180');
+            document.getElementById('dropdownMenu').classList.remove('open');
+
+            remoteCursors.forEach((el, id) => {
+                el.remove();
+            });
+            remoteCursors.clear();
+
             setTimeout(() => {
                 if (editors[type]) {
                     editors[type].resize();
+                    editors[type].blur();
+                    editors[type].focus();
+                    editors[type].blur();
                     updateRemoteCursors();
+                    updateUserIndicatorsInGutter(type);
                 }
-            }, 100);
+                updateUsersPanel(Array.from(remoteUsers.values()));
+            }, 50);
         }
 
         function updateRemoteCursors() {
-            if (!userId) return;
-            
-            window.ref(window.db, 'users').once('value').then(snapshot => {
-                if (!snapshot.exists()) return;
-                const users = snapshot.val();
-                Object.entries(users).forEach(([id, data]) => {
-                    if (id !== userId && data.cursor && data.cursor.file === currentFile) {
-                        setTimeout(() => {
-                            showRemoteCursor(id, data.name || 'User', data.cursor.file, data.cursor.row, data.cursor.column, data.color);
-                        }, 150);
-                    } else if (id !== userId && data.cursor) {
-                        removeRemoteCursor(id);
-                    }
-                });
+            remoteUsers.forEach((data, id) => {
+                if (data.cursor && data.cursor.file === currentFile) {
+                    showRemoteCursor(id, data.name || 'User', data.cursor.file, data.cursor.row, data.cursor.column, data.color);
+                }
             });
         }
 
         function toggleDropdown() { 
-            document.getElementById('dropdownMenu').classList.toggle('open'); 
+            const menu = document.getElementById('dropdownMenu');
+            const arrow = document.getElementById('dropdownArrow');
+            const isOpen = menu.classList.contains('open');
+            
+            if (isOpen) {
+                menu.classList.remove('open');
+                arrow.classList.remove('rotate-180');
+            } else {
+                menu.classList.add('open');
+                arrow.classList.add('rotate-180');
+            }
         }
-        
+
         document.addEventListener('click', (e) => { 
-            if (!e.target.closest('.dropdown')) document.getElementById('dropdownMenu').classList.remove('open'); 
+            if (!e.target.closest('.dropdown')) {
+                document.getElementById('dropdownMenu').classList.remove('open');
+                const arrow = document.getElementById('dropdownArrow');
+                if (arrow) arrow.classList.remove('rotate-180');
+            }
         });
 
         function toggleRun() {
             isRunning = !isRunning;
-            const btn = document.getElementById('runBtn'), icon = document.getElementById('runIcon'), overlay = document.getElementById('previewOverlay');
+            const btn = document.getElementById('runBtn'), 
+                  icon = document.getElementById('runIcon'), 
+                  overlay = document.getElementById('previewOverlay');
+            
             if (isRunning) { 
                 btn.className = 'btn-stop'; 
                 icon.setAttribute('data-lucide', 'square'); 
                 overlay.classList.add('active'); 
+                openConsole();
                 updatePreview(); 
             } else { 
                 btn.className = 'btn-primary'; 
@@ -698,17 +2045,29 @@ btn.addEventListener('click', () => {
 
         function updatePreview() {
             clearConsole();
-            const doc = `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>${editors.css.getValue()}</style></head><body>${editors.html.getValue()}<script>
+            
+            let cssContent = editors.css.getValue();
+            const scssContent = editors.scss.getValue();
+            
+            if (scssContent.trim()) {
+                try {
+                    const sass = new Sass();
+                    const result = sass.compile(scssContent);
+                    cssContent += '\n' + result.text;
+                } catch (e) {
+                    addLog('SCSS Error: ' + e.message, 'error');
+                }
+            }
+            
+            const doc = `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>${cssContent}</style></head><body>${editors.html.getValue()}<script>
 console.log = (...a) => parent.postMessage({t:'log',d:a.join(' ')},'*');
-console.error = (...a) => parent.postMessage({t:'err',d:a.join(' ')},'*');
-window.onerror = (m,u,l) => { parent.postMessage({t:'err',d:m+' (line '+l+')'},'*'); return true; };
+console.error = (...a) => parent.postMessage({t:'error',d:a.join(' ')},'*');
+console.warn = (...a) => parent.postMessage({t:'warn',d:a.join(' ')},'*');
+console.info = (...a) => parent.postMessage({t:'info',d:a.join(' ')},'*');
+window.onerror = (m,u,l) => { parent.postMessage({t:'error',d:m+' (line '+l+')'},'*'); return true; };
 try { ${editors.js.getValue()} } catch(e) { console.error(e.message); }
 <\/script></body></html>`;
             document.getElementById('previewFrame').srcdoc = doc;
-            
-            if (!isConsoleOpen) {
-                openConsole();
-            }
         }
 
         function openConsole() {
@@ -716,6 +2075,7 @@ try { ${editors.js.getValue()} } catch(e) { console.error(e.message); }
             document.getElementById('consoleWrapper').classList.add('open');
             document.getElementById('consoleBtn').classList.add('active');
             document.getElementById('consoleIcon').setAttribute('data-lucide', 'x');
+            applyConsoleFilters();
             lucide.createIcons();
         }
 
@@ -736,32 +2096,65 @@ try { ${editors.js.getValue()} } catch(e) { console.error(e.message); }
             }
         }
 
-        function startResizeMouse(e) {
-            let startY = e.clientY, startH = document.getElementById('consoleWrapper').offsetHeight;
-            function move(e) { 
-                const newH = Math.max(150, Math.min(window.innerHeight - 100, startH + (startY - e.clientY))); 
-                document.getElementById('consoleWrapper').style.height = newH + 'px'; 
-            }
-            function up() { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); }
-            document.addEventListener('mousemove', move); document.addEventListener('mouseup', up);
-        }
+        // Ресайз консоли — сырые touch события, passive:false на самом элементе
+        {
+            const handle = document.getElementById('consoleResize');
+            const wrapper = document.getElementById('consoleWrapper');
+            let startY = 0, startH = 0, active = false;
 
-        function startResizeTouch(e) {
-            e.preventDefault();
-            let startY = e.touches[0].clientY, startH = document.getElementById('consoleWrapper').offsetHeight;
-            function move(e) { 
-                const newH = Math.max(150, Math.min(window.innerHeight - 100, startH + (startY - e.touches[0].clientY))); 
-                document.getElementById('consoleWrapper').style.height = newH + 'px'; 
-            }
-            function up() { document.removeEventListener('touchmove', move); document.removeEventListener('touchend', up); }
-            document.addEventListener('touchmove', move, {passive: false}); document.addEventListener('touchend', up);
+            handle.addEventListener('touchstart', e => {
+                e.preventDefault();
+                active = true;
+                startY = e.touches[0].clientY;
+                startH = wrapper.offsetHeight;
+                wrapper.style.transition = 'none'; // убираем transition — иначе высота анимируется 400мс за каждый пиксель
+            }, { passive: false });
+
+            handle.addEventListener('touchmove', e => {
+                if (!active) return;
+                e.preventDefault();
+                const newH = Math.max(150, Math.min(window.innerHeight - 100, startH + (startY - e.touches[0].clientY)));
+                wrapper.style.height = newH + 'px';
+            }, { passive: false });
+
+            handle.addEventListener('touchend', () => {
+                active = false;
+                wrapper.style.transition = ''; // возвращаем transition для открытия/закрытия
+            });
+            handle.addEventListener('touchcancel', () => {
+                active = false;
+                wrapper.style.transition = '';
+            });
+
+            handle.addEventListener('mousedown', e => {
+                startY = e.clientY;
+                startH = wrapper.offsetHeight;
+                wrapper.style.transition = 'none';
+                const onMove = e => {
+                    const newH = Math.max(150, Math.min(window.innerHeight - 100, startH + (startY - e.clientY)));
+                    wrapper.style.height = newH + 'px';
+                };
+                const onUp = () => {
+                    wrapper.style.transition = '';
+                    document.removeEventListener('mousemove', onMove);
+                    document.removeEventListener('mouseup', onUp);
+                };
+                document.addEventListener('mousemove', onMove);
+                document.addEventListener('mouseup', onUp);
+            });
         }
 
         function clearConsole() { 
-            document.getElementById('consoleBody').innerHTML = '<div class="empty-state">Очищено</div>'; 
-            document.getElementById('logCount').textContent = '0'; 
+            document.getElementById('consoleBody').innerHTML = `
+                <div class="empty-state">
+                    <i data-lucide="terminal" style="width: 48px; height: 48px; margin-bottom: 12px; opacity: 0.3;"></i>
+                    <div>Консоль очищена</div>
+                </div>
+            `; 
+            document.getElementById('logCount').textContent = '0';
+            lucide.createIcons();
         }
-        
+
         function handleConsole(e) {
             if (e.key === 'Enter' && e.target.value.trim()) {
                 addLog('> ' + e.target.value, 'info');
@@ -774,24 +2167,33 @@ try { ${editors.js.getValue()} } catch(e) { console.error(e.message); }
                 e.target.value = '';
             }
         }
-        
+
         function addLog(msg, type) {
             const body = document.getElementById('consoleBody');
-            if (body.children[0]?.classList.contains('empty-state')) body.innerHTML = '';
+            if (body.querySelector('.empty-state')) body.innerHTML = '';
+            
             const div = document.createElement('div'); 
             div.className = 'console-line'; 
-            div.innerHTML = `<span class="console-time">${new Date().toLocaleTimeString('ru-RU',{hour12:false})}</span><span class="console-${type}">${msg}</span>`;
+            
+            if (!consoleFilters[type]) {
+                div.classList.add('hidden');
+            }
+            
+            const time = new Date().toLocaleTimeString('ru-RU',{hour12:false});
+            div.innerHTML = `<span class="console-time">${time}</span><span class="console-${type}">${msg}</span>`;
+            
             body.appendChild(div); 
             body.scrollTop = body.scrollHeight; 
-            document.getElementById('logCount').textContent = body.children.length;
+            updateLogCount();
         }
-        
+
         window.addEventListener('message', (e) => { 
             if (e.data?.t) addLog(e.data.d, e.data.t); 
         });
 
         function setupPinchZoom() {
             let initialDist = 0, initialSize = 16, isPinching = false;
+            
             document.addEventListener('touchstart', (e) => {
                 if (e.touches.length === 2) {
                     isPinching = true;
@@ -799,23 +2201,98 @@ try { ${editors.js.getValue()} } catch(e) { console.error(e.message); }
                     initialSize = fontSize;
                 }
             }, {passive: false});
+            
             document.addEventListener('touchmove', (e) => {
                 if (!isPinching || e.touches.length !== 2) return;
                 e.preventDefault();
                 const dist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
-                fontSize = Math.max(10, Math.min(28, Math.round(initialSize * (dist / initialDist))));
-                Object.values(editors).forEach(ed => ed.setFontSize(fontSize));
-                setTimeout(updateRemoteCursors, 100);
+                const newSize = Math.max(10, Math.min(28, Math.round(initialSize * (dist / initialDist))));
+                
+                if (newSize !== fontSize) {
+                    fontSize = newSize;
+                    Object.values(editors).forEach(ed => {
+                        ed.setFontSize(fontSize);
+                        ed.renderer.updateFontSize();
+                    });
+                }
             }, {passive: false});
+            
             document.addEventListener('touchend', () => { 
-                isPinching = false; 
-                setTimeout(updateRemoteCursors, 100);
+                isPinching = false;
             });
         }
-        
+
+        function setupAutoSave() {
+            setInterval(() => {
+                ['html','css','scss','js'].forEach(file => {
+                    if (editors[file]) {
+                        const content = editors[file].getValue();
+                        localStorage.setItem('backup_' + file, content);
+                    }
+                });
+            }, 30000);
+        }
+
+        function saveVersion(file, content) {
+            if (!versionHistory[file]) versionHistory[file] = [];
+            versionHistory[file].push({ content: content, timestamp: Date.now() });
+            if (versionHistory[file].length > 50) versionHistory[file].shift();
+        }
+
+        function showToast(type, title, message) {
+            const container = document.getElementById('toastContainer');
+            
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            
+            const iconMap = {
+                success: 'check-circle',
+                error: 'x-circle',
+                warning: 'alert-triangle',
+                info: 'info'
+            };
+            
+            toast.innerHTML = `
+                <div class="toast-icon">
+                    <i data-lucide="${iconMap[type]}" style="width: 20px; height: 20px;"></i>
+                </div>
+                <div class="toast-content">
+                    <div class="toast-title">${title}</div>
+                    <div class="toast-message">${message}</div>
+                </div>
+                <div class="toast-close" onclick="removeToast(this.parentElement)">
+                    <i data-lucide="x" style="width: 16px; height: 16px;"></i>
+                </div>
+            `;
+            
+            container.appendChild(toast);
+            lucide.createIcons();
+            
+            setTimeout(() => {
+                if (toast.parentNode) removeToast(toast);
+            }, 5000);
+        }
+
+        function removeToast(toast) {
+            toast.classList.add('removing');
+            setTimeout(() => {
+                if (toast.parentNode) toast.remove();
+            }, 300);
+        }
+
         window.addEventListener('beforeunload', () => {
             removeUser();
         });
+
+        window.addEventListener('online', () => {
+            showToast('success', 'Онлайн', 'Соединение восстановлено');
+            if (!isConnected) setupFirebase();
+        });
+
+        window.addEventListener('offline', () => {
+            showToast('error', 'Офлайн', 'Соединение потеряно');
+            isConnected = false;
+        });
     </script>
 </body>
-</html>
+    </html>
